@@ -10,7 +10,7 @@ Layer hierarchy:
 ```
 L0: contextus (base)    ← upstream, agent-agnostic
 L1: contextus-claude    ← this repo (Claude-specific hooks, skills, rules, agents)
-L2: contextus-*         ← downstream profiles (e.g. contextus-kw, contextus-sh-dev)
+L2: contextus-*         ← downstream profiles (e.g. contextus-kw, contextus-dev-sh)
 ```
 
 ## Key Files and Their Roles
@@ -72,7 +72,7 @@ bash .claude/setup.sh [--layer2 <repo>]
 ## Contribution Scope
 
 - Hook, rule, agent, or skill improvements → PR to this repo (L1)
-- Shell-specific conventions → PR to contextus-sh-dev (L2)
+- Shell-specific conventions → PR to contextus-dev-sh (L2)
 - Agent-agnostic conventions (HANDOFF format, `.spec/` workflow) → PR to contextus (L0)
 
 All content must be generic and reusable (no project-specific content). Dependencies: `bash`, `date`, `sed` only.

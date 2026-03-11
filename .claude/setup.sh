@@ -7,7 +7,7 @@
 #   bash .claude/setup.sh [--layer2 <repo>]
 #
 # Options:
-#   --layer2 <repo>   Install an L2 profile (e.g. contextus-kw, contextus-sh-dev)
+#   --layer2 <repo>   Install an L2 profile (e.g. contextus-kw, contextus-dev-sh)
 #
 # What this does:
 #   1. Checks gh CLI is installed and authenticated

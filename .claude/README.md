@@ -79,13 +79,13 @@ Run `/sos-recall` when you (or Claude) can't remember what was decided earlier i
 ```
 L0: contextus (base)    ← upstream
 L1: contextus-claude    ← this repo
-L2: contextus-*         ← downstream (e.g. contextus-sh-dev)
+L2: contextus-*         ← downstream (e.g. contextus-dev-sh)
 ```
 
 ## Contribution Policy
 
 - Improvements to hooks, rules, agents, or skills: PR to this repo
-- Shell-specific conventions: PR to contextus-sh-dev
+- Shell-specific conventions: PR to contextus-dev-sh
 - Agent-agnostic conventions (HANDOFF, .spec/): PR to contextus
 
 ## Key Principles (for contributors)
