@@ -44,17 +44,17 @@
 - [x] `proxy/tests/proxy_test.rs` に統合テスト4件を書く（`run()` 未存在で RED）
 - [x] `cargo test --no-run` で Compile RED を確認
 
-### GREEN フェーズ
-- [ ] `anyhow = "1"` を `proxy/Cargo.toml` に追加
-- [ ] `parse_connect_target` を抽出 → 単体テスト GREEN
-- [ ] `run()` を抽出 → 統合テストが compile する状態に
-- [ ] `handle_inner()` で 400/502 を実装 → 統合テスト GREEN
+### GREEN フェーズ（完了 ✅）
+- [x] `anyhow = "1"` を `proxy/Cargo.toml` に追加
+- [x] `parse_connect_target` を抽出 → 単体テスト GREEN
+- [x] `run()` を抽出 → 統合テストが compile する状態に
+- [x] `handle_inner()` で 400/502 を実装 → 統合テスト GREEN
 
-### REFACTOR フェーズ
-- [ ] `main()` を薄くする（bind + run の呼び出しのみ）
-- [ ] accept ループエラーハンドリング（panic → log + continue）
-- [ ] doc comments 追加（全 pub(crate) アイテム）
-- [ ] `cargo fmt` + `cargo clippy -- -D warnings` をパス
+### REFACTOR フェーズ（完了 ✅）
+- [x] `main()` を薄くする（bind + run の呼び出しのみ）
+- [x] accept ループエラーハンドリング（panic → log + continue）
+- [x] doc comments 追加（`load_allowlist`, `parse_connect_target`, `run`）
+- [x] `cargo fmt` + `cargo clippy -- -D warnings` をパス
 
 ### コミット計画
 ```
