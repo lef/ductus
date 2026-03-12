@@ -1,6 +1,6 @@
 # TODO — ductus HTTP CONNECT proxy
 
-## タスク
+## フェーズ0: sandbox 用途（完了）
 
 - [x] proxy/Cargo.toml 作成（tokio, clap, serde, toml 依存）
 - [x] proxy/src/main.rs 実装（69行）
@@ -10,6 +10,27 @@
 - [x] 手動テスト: curl --proxy でブロック・通過の両方を確認 ✅
 - [x] load_allowlist のユニットテストを追加
 
+## フェーズ1: パーソナルウェブアーカイブ（将来）
+
+**ビジョン**: 自分の全ブラウザ通信を記録するプロキシ。詳細は `.spec/PLAN.md` 参照。
+
+### 設計・調査
+- [ ] HTTPS インターセプト方式の調査（自前 CA + MITM）
+- [ ] 自前 CA 証明書の生成と各ブラウザへのインストール方法を確認
+- [ ] SSL termination ライブラリの選定（rustls? openssl?)
+- [ ] フェーズ1の SPEC.md 作成（SDD ワークフロー）
+
+### 記録機能
+- [ ] リクエスト/レスポンスのログ形式を設計（WARC? SQLite? plain files?）
+- [ ] ストレージ戦略（全コンテンツ保存 vs URL + メタデータのみ）
+- [ ] AI 検索・要約インターフェースの設計
+
+### 実装
+- [ ] HTTPS インターセプト実装
+- [ ] ログ記録機能実装
+- [ ] allowlist → blocklist モデルへの転換（パーソナル用途では全通過がデフォルト）
+
 ## 参照
 
-- `.spec/SPEC.md`: 確定仕様
+- `.spec/PLAN.md`: 本来のビジョン（パーソナルウェブアーカイブ）
+- `.spec/SPEC.md`: フェーズ0の確定仕様

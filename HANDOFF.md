@@ -1,47 +1,45 @@
 # HANDOFF — Session Transition Notes
 
-**Last Updated**: 2026-03-10 22:55
-**Previous Work**: CLAUDE.md作成、HTTP CONNECTプロキシのPLAN.md・SPEC.md作成
+**Last Updated**: 2026-03-13
+**Previous Work**: フェーズ0完了（HTTP CONNECT proxy 実装・テスト済み）
 
 ## Current State
 
-### Completed (this session)
-- `CLAUDE.md` 作成（codebase初期化 `/init`）
-- `.spec/PLAN.md` 作成（HTTP CONNECT proxy, ~50行Rust, domain allowlist）
-- `.spec/SPEC.md` 作成（設計を詳細化、ユーザーとの質疑応答を経て確定）
+### Completed
 
-### In Progress
-- なし
+**フェーズ0 — sandbox 用 HTTP CONNECT proxy**:
+- `proxy/src/main.rs` 69行で実装完了
+- evil.com → 403、example.com → 通過 ✅
+- `load_allowlist` ユニットテスト 5件（t_wada TDD）
+- Rust 1.94.0 / build-essential がホストに必要
+
+**ビジョン回収（2026-03-13）**:
+- 本来の目的: パーソナルウェブアーカイブプロキシ → `.spec/PLAN.md` に記録済み
+- フェーズ0は sandbox 用途として先に実装した中間ステップ
 
 ### Not Started (priority order)
-1. `.spec/TODO.md` 作成（SPEC.md から実装タスクを分解）
-2. `proxy/` ディレクトリ作成、Cargo.toml 作成
-3. `proxy/src/main.rs` 実装（~50–60行）
-4. `proxy/config.toml` と `proxy/allowlist.txt` のサンプル作成
-5. 動作確認
+
+1. **フェーズ1 SPEC.md 作成** — HTTPS インターセプト設計（SDD ワークフローで進める）
+2. **自前 CA 方式の調査** — rustls vs openssl、ブラウザへのインストール
+3. **ログ形式の設計** — WARC / SQLite / plain files の比較
+
+詳細は `.spec/TODO.md` 参照。
 
 ## Next Session: Read First
 
-- `.spec/SPEC.md` — 設計の全詳細はここ
-- `.spec/PLAN.md` — ユーザーの元の意図
-- まず TODO.md を作ってユーザーに確認してから実装に入ること（SDD ルール）
+- `.spec/PLAN.md` — ビジョン全体（フェーズ0完了後の次フェーズが書いてある）
+- `.spec/TODO.md` — フェーズ1タスクリスト
+- `proxy/src/main.rs` — 現在の実装（69行）
 
 ## Key Decisions Made
 
-- **設定ファイル**: `config.toml`（port, allowlist パスを定義）。git管理対象
-- **CLI引数**: `--config`, `--port`, `--allowlist`。優先順位: CLI > config.toml > デフォルト
-- **allowlist**: テキストファイル、1行1ドメイン、`#`コメント対応、完全一致のみ（v1）
-- **依存クレート**: tokio, clap（derive）, serde + toml
-- **403ボディ**: ブロックされたホスト名と `echo "<host>" >> allowlist.txt` のコマンドを明示。ユーザーがallowlistを育てられるように
-- **行数目標**: ~50行はタイト → ~50–60行を許容範囲とする
-
-## Blockers / Watch Out For
-
-- 50行の制約と clap/serde の行数は競合する。derive マクロで圧縮する方針
-- ワイルドカードマッチ（`*.example.com`）はスコープ外（将来対応）
+- **フェーズ0 = sandbox 用途**: tutus の AI エージェント通信制御
+- **フェーズ1 = パーソナルアーカイブ**: 全ブラウザ通信記録、HTTPS インターセプト必須
+- **allowlist → blocklist**: パーソナル用途では全通過がデフォルトになる可能性
 
 ## Changed Files
 
-- `CLAUDE.md`: 新規作成（codebase概要、フック動作、SDD workflow）
-- `.spec/PLAN.md`: テンプレートから実内容に更新
-- `.spec/SPEC.md`: 新規作成（HTTP CONNECTプロキシの設計仕様）
+- `.spec/PLAN.md`: 本来のビジョン追記（2026-03-13）
+- `.spec/TODO.md`: フェーズ1タスク追加（2026-03-13）
+- `proxy/src/main.rs`: ユニットテスト追加
+- `proxy/Cargo.toml`: tempfile dev-dependency 追加
