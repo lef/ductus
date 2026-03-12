@@ -1,0 +1,3 @@
+# allowed hosts (host only, no port)
+example.com
+api.github.com
