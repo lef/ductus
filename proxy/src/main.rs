@@ -67,3 +67,58 @@ async fn main() {
         tokio::spawn(handle(stream, allowlist.clone(), allowlist_path.clone()));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn write_temp(content: &str) -> tempfile::NamedTempFile {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn load_allowlist_parses_comments_and_hosts() {
+        let tmp = write_temp(
+            "# header comment\n\
+             example.com:443\n\
+             api.example.com\n",
+        );
+        let set = load_allowlist(tmp.path().to_str().unwrap());
+        assert_eq!(set.len(), 2);
+        assert!(set.contains("example.com:443"));
+        assert!(set.contains("api.example.com"));
+    }
+
+    #[test]
+    fn load_allowlist_skips_empty_lines() {
+        let tmp = write_temp("\n\nexample.com\n\n");
+        let set = load_allowlist(tmp.path().to_str().unwrap());
+        assert_eq!(set.len(), 1);
+        assert!(set.contains("example.com"));
+    }
+
+    #[test]
+    fn load_allowlist_skips_comment_only_lines() {
+        let tmp = write_temp("# just a comment\n# another\n");
+        let set = load_allowlist(tmp.path().to_str().unwrap());
+        assert!(set.is_empty());
+    }
+
+    #[test]
+    fn load_allowlist_strips_trailing_comment() {
+        let tmp = write_temp("example.com:443  # trailing comment\n");
+        let set = load_allowlist(tmp.path().to_str().unwrap());
+        assert_eq!(set.len(), 1);
+        assert!(set.contains("example.com:443"));
+    }
+
+    #[test]
+    fn load_allowlist_missing_file_returns_empty() {
+        let set = load_allowlist("/nonexistent/path/does-not-exist.txt");
+        assert!(set.is_empty());
+    }
+}

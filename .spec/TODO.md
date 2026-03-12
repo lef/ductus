@@ -8,6 +8,7 @@
 - [x] proxy/allowlist.txt サンプル作成
 - [x] cargo build で動作確認
 - [x] 手動テスト: curl --proxy でブロック・通過の両方を確認 ✅
+- [x] load_allowlist のユニットテストを追加
 
 ## 参照
 
