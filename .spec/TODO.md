@@ -67,6 +67,16 @@ docs: add doc comments to all public items
 chore: add anyhow dependency
 ```
 
+## contextus エコシステム改善（発見したもの）
+
+- [x] SessionStart フックで .spec/ ファイルを inject（contextus-claude contrib 済み）
+- [x] setup.sh --update 実装（L0/L1/L2+ 一括同期、contextus-claude contrib 済み）
+- [x] L2 ルール名前空間修正（rules/<profile>/、contextus-claude contrib 済み）
+- [x] TDD HARD RULE を L1 に集約、L2 の重複削除（3 repos contrib 済み）
+- [x] contextus (L0) に層間互換性課題を記録
+- [ ] setup.sh の bats テスト追加（HARD RULE 適用: 実装したが tests なし）
+- [ ] tutus の symlink 構造を実ディレクトリに移行
+
 ## 参照
 
 - `.spec/PLAN.md`: 本来のビジョン（パーソナルウェブアーカイブ）

@@ -56,6 +56,24 @@
 - **cloudnative-co/claude-code-starter-kit**: Claude Code 開発環境の事実上の標準。TDD・エージェント構成・safety hook の参考に。Rust 固有の内容はないが workflow は参考になる
 - **contextus-dev-rust/rules/**: Rust ベストプラクティス（linting, testing, error-handling 等）。実装前に必ず参照する
 
+## contextus エコシステムへの contrib（2026-03-13 後半）
+
+### setup.sh --update 実装
+- `setup.sh --update` で L0→L1→L2+ を一括同期できるようにした
+- L2+ プロファイルは `.claude/.contextus/layers` に記録（1行1プロファイル）
+- L2 ルールのインストール先を `rules/<profile>/` に名前空間化（L1 との衝突防止）
+- **注意**: tutus の symlink 構造には未対応。`.contextus/.claude/` 経由で直接操作が必要
+
+### TDD HARD RULE の責任分界点
+- HARD RULE（実装前に失敗するテスト必須）は L1 `tdd-guide` agent に集約
+- L2（dev-rust, dev-sh）は言語固有の「どうやって」のみ担当
+- 重複排除: L2 から HARD RULE セクションを削除
+
+### /dumpmem と /handoff の使い分け（ユーザー指摘）
+- `/handoff`: セッション終了時の軽量版
+- `/dumpmem`: コンテキストが大きくなったとき、大量の作業後の包括保存
+- 今回のように多くの contrib を行ったあとは `/handoff` ではなく `/dumpmem`
+
 ## Rejected Approaches
 
 - `--permission-mode auto` on sandbox: サーバー依存・root 制限あり → `bypassPermissions` + non-root が正解（tutus 側で解決済み）
