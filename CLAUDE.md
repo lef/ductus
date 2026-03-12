@@ -22,9 +22,12 @@ L2: contextus-*         ← downstream profiles (e.g. contextus-kw, contextus-de
 | `.spec/` | Spec-Driven Development scaffold (PLAN → SPEC/DESIGN → TODO → KNOWLEDGE) |
 | `.claude/settings.json` | Hook wiring and permission deny-list |
 | `.claude/hooks/memory-persistence/` | SessionStart / Stop / PreCompact hook scripts |
+| `.claude/hooks/safety-net.sh` | PreToolUse hook — blocks destructive git/bash commands |
 | `.claude/skills/handoff/SKILL.md` | `/handoff` slash command |
 | `.claude/skills/sos-recall/SKILL.md` | `/sos-recall` emergency context recovery |
-| `.claude/rules/` | Rule files injected into Claude's context (memory, agents, git-workflow, security, rust-style) |
+| `.claude/skills/dumpmem/SKILL.md` | `/dumpmem` full context dump before memory loss |
+| `.claude/rules/` | Rule files injected into Claude's context (memory, agents, git-workflow, security, sdd, agent-security) |
+| `.claude/rules/rust/` | Rust開発ルール（L2: contextus-dev-rust） |
 | `.claude/agents/` | Sub-agent definitions (planner, architect, tdd-guide, code-reviewer, security-reviewer) |
 | `.claude/setup.sh` | Bootstrap script for installing contextus-claude into a new project |
 | `.claude/statusline.sh` | Status line command for Claude Code's status bar |
