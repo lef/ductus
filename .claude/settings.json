@@ -45,6 +45,15 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/safety-net.sh"
+          }
+        ]
+      },
+      {
         "matcher": "tool == \"Bash\" && tool_input.command matches \"git push\"",
         "hooks": [
           {

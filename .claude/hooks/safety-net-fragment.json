@@ -1,0 +1,10 @@
+{
+  "_comment": "Add this entry to settings.json → hooks → PreToolUse array",
+  "matcher": "",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/safety-net.sh"
+    }
+  ]
+}

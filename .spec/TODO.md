@@ -30,7 +30,44 @@
 - [ ] ログ記録機能実装
 - [ ] allowlist → blocklist モデルへの転換（パーソナル用途では全通過がデフォルト）
 
+## フェーズ0.5: コード品質改善
+
+> ⚠️ テストを書いてから実装（t_wada TDD）。**実装開始前にモデルを切り替えること。**
+
+### 文書・設定（完了）
+- [x] SPEC.md にフェーズ0.5セクション追記
+- [x] TODO.md にフェーズ0.5チェックリスト追記
+- [x] contextus (L0/L1) + contextus-dev-rust (L2) を ductus に導入
+
+### RED フェーズ（次セッション: モデル切り替え後）
+- [ ] `parse_connect_target` 単体テスト4件を書く（Compile RED）
+- [ ] `proxy/tests/proxy_test.rs` に統合テスト4件を書く（`run()` 未存在で RED）
+- [ ] `cargo test --no-run` で Compile RED を確認
+
+### GREEN フェーズ
+- [ ] `anyhow = "1"` を `proxy/Cargo.toml` に追加
+- [ ] `parse_connect_target` を抽出 → 単体テスト GREEN
+- [ ] `run()` を抽出 → 統合テストが compile する状態に
+- [ ] `handle_inner()` で 400/502 を実装 → 統合テスト GREEN
+
+### REFACTOR フェーズ
+- [ ] `main()` を薄くする（bind + run の呼び出しのみ）
+- [ ] accept ループエラーハンドリング（panic → log + continue）
+- [ ] doc comments 追加（全 pub(crate) アイテム）
+- [ ] `cargo fmt` + `cargo clippy -- -D warnings` をパス
+
+### コミット計画
+```
+test: add unit tests for parse_connect_target
+test: add integration tests for 200/403/400/502 paths
+refactor: extract parse_connect_target and run()
+fix: return 400 on non-CONNECT, 502 on target connect failure
+fix: replace unwrap() with anyhow error handling
+docs: add doc comments to all public items
+chore: add anyhow dependency
+```
+
 ## 参照
 
 - `.spec/PLAN.md`: 本来のビジョン（パーソナルウェブアーカイブ）
-- `.spec/SPEC.md`: フェーズ0の確定仕様
+- `.spec/SPEC.md`: フェーズ0 + フェーズ0.5の確定仕様

@@ -56,12 +56,16 @@ api.github.com
 ## 403 レスポンスのボディ
 
 ```
-BLOCKED: <host> is not in the allowlist.
-To allow this domain, add it to <allowlist_path>:
-  echo "<host>" >> <allowlist_path>
+BLOCKED: <host>
+ALLOWLIST: <allowlist_path>
 ```
 
-ユーザーが何をブロックされたかを把握し、allowlist を育てられるようにする。
+- `BLOCKED:` — ブロックされたドメイン名（ホスト部分のみ）
+- `ALLOWLIST:` — allowlist ファイルの絶対パス
+
+**読み手は AI エージェント。** tutus 内の AI が 403 を受け取り、ブロックされたドメインを把握し、
+必要と判断すれば `<allowlist_path>` にドメインを追記する。
+コマンドは含まない — パース・判断・操作は読み手の責任。
 
 ## 依存クレート
 
@@ -90,3 +94,44 @@ To allow this domain, add it to <allowlist_path>:
 - allowlist のホットリロード（SIGHUP等）
 - HTTPS 証明書検証
 - 認証（Proxy-Authorization）
+
+---
+
+## フェーズ0.5: コード品質改善（TDD + エラーハンドリング）
+
+**目的**: 外部から観察できる振る舞いを変えずに、コードを TDD 水準に引き上げる。
+
+### 抽出する関数
+
+- `parse_connect_target(line: &str) -> Option<String>`: CONNECT 行パーサー（純粋関数、テスタブル）
+- `run(listener, allowlist, allowlist_path)`: accept ループ（統合テスト用に main から切り出す）
+
+### エラーハンドリング仕様
+
+| 状況 | 現在の動作 | 新しい動作 |
+|---|---|---|
+| bind 失敗 | panic | `anyhow::Error` で終了（ログ付き） |
+| accept エラー | panic | ログして継続（トランジェントエラー対応） |
+| CONNECT 以外のメソッド | サイレントドロップ | `HTTP/1.1 400 Bad Request` を返す |
+| ターゲット接続失敗 | サイレントドロップ | `HTTP/1.1 502 Bad Gateway` を返す |
+
+### テスト追加
+
+**単体テスト** (`proxy/src/main.rs` の `#[cfg(test)]` に追加):
+- `parse_connect_target`: 正常 / 非CONNECT / 空文字 / 不完全 の4ケース
+
+**統合テスト** (`proxy/tests/proxy_test.rs` — 新規ファイル):
+- port-0 bind で実 TCP 接続（`run()` を tokio::task で起動）
+- allowed domain → `200 Connection established`
+- blocked domain → `403 Forbidden`
+- CONNECT 以外のメソッド → `400 Bad Request`
+- 到達不能ターゲット → `502 Bad Gateway`
+
+### 依存追加
+
+- `anyhow = "1"` → `[dependencies]`（バイナリ用エラー処理、`?` で伝播）
+
+### コメント
+
+- すべての `pub(crate)` アイテムに `///` doc comment
+- 非自明なロジックに `//`（CONNECT ヘッダードレイン、domain 抽出の `:` 分割）
