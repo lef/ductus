@@ -39,10 +39,10 @@
 - [x] TODO.md にフェーズ0.5チェックリスト追記
 - [x] contextus (L0/L1) + contextus-dev-rust (L2) を ductus に導入
 
-### RED フェーズ（次セッション: モデル切り替え後）
-- [ ] `parse_connect_target` 単体テスト4件を書く（Compile RED）
-- [ ] `proxy/tests/proxy_test.rs` に統合テスト4件を書く（`run()` 未存在で RED）
-- [ ] `cargo test --no-run` で Compile RED を確認
+### RED フェーズ（Compile RED 確認済み ✅）
+- [x] `parse_connect_target` 単体テスト4件を書く（Compile RED）
+- [x] `proxy/tests/proxy_test.rs` に統合テスト4件を書く（`run()` 未存在で RED）
+- [x] `cargo test --no-run` で Compile RED を確認
 
 ### GREEN フェーズ
 - [ ] `anyhow = "1"` を `proxy/Cargo.toml` に追加

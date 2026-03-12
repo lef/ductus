@@ -121,4 +121,28 @@ mod tests {
         let set = load_allowlist("/nonexistent/path/does-not-exist.txt");
         assert!(set.is_empty());
     }
+
+    #[test]
+    fn parse_connect_target_valid_request() {
+        let result = parse_connect_target("CONNECT example.com:443 HTTP/1.1");
+        assert_eq!(result, Some("example.com:443".to_owned()));
+    }
+
+    #[test]
+    fn parse_connect_target_non_connect_method() {
+        let result = parse_connect_target("GET / HTTP/1.1");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_connect_target_empty_line() {
+        let result = parse_connect_target("");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_connect_target_missing_target() {
+        let result = parse_connect_target("CONNECT");
+        assert_eq!(result, None);
+    }
 }
