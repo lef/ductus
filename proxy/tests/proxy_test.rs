@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -12,7 +12,7 @@ async fn spawn_proxy(allowed: &[&str]) -> u16 {
     }
     tmp.flush().unwrap();
     let allowlist_path = tmp.path().to_str().unwrap().to_string();
-    let allowlist = Arc::new(ductus::load_allowlist(&allowlist_path));
+    let allowlist = Arc::new(RwLock::new(ductus::load_allowlist(&allowlist_path)));
     let allowlist_path = Arc::new(allowlist_path);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

@@ -1,6 +1,6 @@
 use clap::Parser;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 
 #[derive(Parser)]
@@ -32,11 +32,26 @@ async fn main() -> anyhow::Result<()> {
             .or(cfg.allowlist)
             .unwrap_or_else(|| "allowlist.txt".into()),
     );
-    let allowlist = Arc::new(ductus::load_allowlist(&allowlist_path));
+    let allowlist = Arc::new(RwLock::new(ductus::load_allowlist(&allowlist_path)));
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .map_err(|e| anyhow::anyhow!("failed to bind to port {port}: {e}"))?;
     eprintln!(":: ductus listening on :{port}");
+
+    // Reload allowlist on SIGHUP
+    let al_sig = allowlist.clone();
+    let path_sig = allowlist_path.clone();
+    tokio::spawn(async move {
+        let mut sig = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+            .expect("failed to install SIGHUP handler");
+        loop {
+            sig.recv().await;
+            eprintln!(":: SIGHUP — reloading allowlist from {path_sig}");
+            ductus::reload_allowlist(&al_sig, &path_sig);
+            eprintln!(":: allowlist reloaded");
+        }
+    });
+
     ductus::run(listener, allowlist, allowlist_path).await;
     Ok(())
 }

@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -56,6 +56,17 @@ pub fn load_allowlist(path: &str) -> Allowlist {
     Allowlist { exact, wildcards }
 }
 
+/// Reloads the allowlist from disk, replacing the current contents.
+///
+/// Intended for use with a SIGHUP handler. If the file cannot be read,
+/// the allowlist becomes empty (same behavior as `load_allowlist`).
+pub fn reload_allowlist(allowlist: &Arc<RwLock<Allowlist>>, path: &str) {
+    let new = load_allowlist(path);
+    if let Ok(mut guard) = allowlist.write() {
+        *guard = new;
+    }
+}
+
 /// Parses an HTTP CONNECT request line and returns the target `host:port`.
 /// Returns `None` if the line is not a valid CONNECT request.
 pub fn parse_connect_target(request_line: &str) -> Option<String> {
@@ -67,7 +78,11 @@ pub fn parse_connect_target(request_line: &str) -> Option<String> {
 }
 
 /// Runs the proxy accept loop on the given listener.
-pub async fn run(listener: TcpListener, allowlist: Arc<Allowlist>, allowlist_path: Arc<String>) {
+pub async fn run(
+    listener: TcpListener,
+    allowlist: Arc<RwLock<Allowlist>>,
+    allowlist_path: Arc<String>,
+) {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
@@ -80,7 +95,7 @@ pub async fn run(listener: TcpListener, allowlist: Arc<Allowlist>, allowlist_pat
     }
 }
 
-async fn handle(client: TcpStream, allowlist: Arc<Allowlist>, allowlist_path: Arc<String>) {
+async fn handle(client: TcpStream, allowlist: Arc<RwLock<Allowlist>>, allowlist_path: Arc<String>) {
     if let Err(e) = handle_inner(client, allowlist, allowlist_path).await {
         eprintln!("handle error: {e}");
     }
@@ -88,7 +103,7 @@ async fn handle(client: TcpStream, allowlist: Arc<Allowlist>, allowlist_path: Ar
 
 async fn handle_inner(
     mut client: TcpStream,
-    allowlist: Arc<Allowlist>,
+    allowlist: Arc<RwLock<Allowlist>>,
     allowlist_path: Arc<String>,
 ) -> anyhow::Result<()> {
     let (reader, mut writer) = client.split();
@@ -109,7 +124,15 @@ async fn handle_inner(
     };
     let domain = host.split(':').next().unwrap_or(&host);
 
-    if !allowlist.contains(domain) {
+    // Acquire the read lock and drop it before any .await
+    let blocked = {
+        let guard = allowlist
+            .read()
+            .map_err(|e| anyhow::anyhow!("allowlist lock poisoned: {e}"))?;
+        !guard.contains(domain)
+    };
+
+    if blocked {
         let body = format!("BLOCKED: {domain}\nALLOWLIST: {allowlist_path}\n");
         let response = format!(
             "HTTP/1.1 403 Forbidden\r\nContent-Length: {}\r\n\r\n{body}",
@@ -233,6 +256,31 @@ mod tests {
         assert!(al.contains("api.github.com"));
         assert!(al.contains("example.com"));
         assert!(!al.contains("github.com"));
+    }
+
+    // --- reload_allowlist tests ---
+
+    #[test]
+    fn reload_adds_new_domain() {
+        let tmp = write_temp("example.com\n");
+        let path = tmp.path().to_str().unwrap().to_string();
+        let al = Arc::new(std::sync::RwLock::new(load_allowlist(&path)));
+        assert!(al.read().unwrap().contains("example.com"));
+        assert!(!al.read().unwrap().contains("new-domain.com"));
+
+        // Simulate editing the file
+        std::fs::write(tmp.path(), "example.com\nnew-domain.com\n").unwrap();
+        reload_allowlist(&al, &path);
+
+        assert!(al.read().unwrap().contains("new-domain.com"));
+    }
+
+    #[test]
+    fn reload_handles_missing_file() {
+        let al = Arc::new(std::sync::RwLock::new(load_allowlist("/nonexistent")));
+        // Should not panic
+        reload_allowlist(&al, "/nonexistent");
+        assert!(!al.read().unwrap().contains("anything"));
     }
 
     // --- parse_connect_target tests ---
