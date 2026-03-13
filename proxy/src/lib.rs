@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -67,6 +67,126 @@ pub fn reload_allowlist(allowlist: &Arc<RwLock<Allowlist>>, path: &str) {
     }
 }
 
+/// Loads a merged allowlist from a permanent file and an optional session file.
+///
+/// Both files use the same format. Entries from both are combined into
+/// a single `Allowlist`. If the session file does not exist or is `None`,
+/// behaves identically to `load_allowlist`.
+pub fn load_merged_allowlist(permanent: &str, session: Option<&str>) -> Allowlist {
+    let mut al = load_allowlist(permanent);
+    if let Some(session_path) = session {
+        let session_al = load_allowlist(session_path);
+        al.exact.extend(session_al.exact);
+        al.wildcards.extend(session_al.wildcards);
+    }
+    al
+}
+
+/// Reloads the merged allowlist from disk (permanent + optional session).
+pub fn reload_merged_allowlist(
+    allowlist: &Arc<RwLock<Allowlist>>,
+    permanent: &str,
+    session: Option<&str>,
+) {
+    let new = load_merged_allowlist(permanent, session);
+    if let Ok(mut guard) = allowlist.write() {
+        *guard = new;
+    }
+}
+
+/// Log of blocked domains with in-memory deduplication.
+pub struct BlockedLog {
+    seen: HashSet<String>,
+    file: Option<std::fs::File>,
+}
+
+impl BlockedLog {
+    /// Records a blocked domain. Deduplicates: only writes on first occurrence.
+    pub fn record(&mut self, domain: &str) {
+        if !self.seen.insert(domain.to_owned()) {
+            return;
+        }
+        if let Some(ref mut f) = self.file {
+            use std::io::Write;
+            let ts = format_utc_now();
+            let _ = writeln!(f, "{ts} {domain}");
+        }
+    }
+}
+
+/// Creates a new `BlockedLog`. If `path` is `None`, no file is written.
+pub fn new_blocked_log(path: Option<&str>) -> Arc<Mutex<BlockedLog>> {
+    let file = path.and_then(|p| {
+        if let Some(parent) = std::path::Path::new(p).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::File::create(p).ok()
+    });
+    Arc::new(Mutex::new(BlockedLog {
+        seen: HashSet::new(),
+        file,
+    }))
+}
+
+/// Formats the current time as `YYYY-MM-DDThh:mm:ssZ` without external crates.
+fn format_utc_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Manual UTC conversion
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    // Date calculation from days since epoch
+    let mut y = 1970i64;
+    let mut remaining = days as i64;
+    loop {
+        let days_in_year = if is_leap(y) { 366 } else { 365 };
+        if remaining < days_in_year {
+            break;
+        }
+        remaining -= days_in_year;
+        y += 1;
+    }
+    let leap = is_leap(y);
+    let month_days: [i64; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut m = 0;
+    for md in &month_days {
+        if remaining < *md {
+            break;
+        }
+        remaining -= *md;
+        m += 1;
+    }
+    format!(
+        "{y:04}-{:02}-{:02}T{hours:02}:{minutes:02}:{seconds:02}Z",
+        m + 1,
+        remaining + 1
+    )
+}
+
+fn is_leap(y: i64) -> bool {
+    y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+}
+
 /// Parses an HTTP CONNECT request line and returns the target `host:port`.
 /// Returns `None` if the line is not a valid CONNECT request.
 pub fn parse_connect_target(request_line: &str) -> Option<String> {
@@ -82,11 +202,17 @@ pub async fn run(
     listener: TcpListener,
     allowlist: Arc<RwLock<Allowlist>>,
     allowlist_path: Arc<String>,
+    blocked_log: Arc<Mutex<BlockedLog>>,
 ) {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
-                tokio::spawn(handle(stream, allowlist.clone(), allowlist_path.clone()));
+                tokio::spawn(handle(
+                    stream,
+                    allowlist.clone(),
+                    allowlist_path.clone(),
+                    blocked_log.clone(),
+                ));
             }
             Err(e) => {
                 eprintln!("accept error: {e}");
@@ -95,8 +221,13 @@ pub async fn run(
     }
 }
 
-async fn handle(client: TcpStream, allowlist: Arc<RwLock<Allowlist>>, allowlist_path: Arc<String>) {
-    if let Err(e) = handle_inner(client, allowlist, allowlist_path).await {
+async fn handle(
+    client: TcpStream,
+    allowlist: Arc<RwLock<Allowlist>>,
+    allowlist_path: Arc<String>,
+    blocked_log: Arc<Mutex<BlockedLog>>,
+) {
+    if let Err(e) = handle_inner(client, allowlist, allowlist_path, blocked_log).await {
         eprintln!("handle error: {e}");
     }
 }
@@ -105,6 +236,7 @@ async fn handle_inner(
     mut client: TcpStream,
     allowlist: Arc<RwLock<Allowlist>>,
     allowlist_path: Arc<String>,
+    blocked_log: Arc<Mutex<BlockedLog>>,
 ) -> anyhow::Result<()> {
     let (reader, mut writer) = client.split();
     let mut lines = BufReader::new(reader).lines();
@@ -133,6 +265,10 @@ async fn handle_inner(
     };
 
     if blocked {
+        // Record blocked domain (lock is std::sync::Mutex, no .await while held)
+        if let Ok(mut log) = blocked_log.lock() {
+            log.record(domain);
+        }
         let body = format!("BLOCKED: {domain}\nALLOWLIST: {allowlist_path}\n");
         let response = format!(
             "HTTP/1.1 403 Forbidden\r\nContent-Length: {}\r\n\r\n{body}",
@@ -307,5 +443,181 @@ mod tests {
     fn parse_connect_target_missing_target() {
         let result = parse_connect_target("CONNECT");
         assert_eq!(result, None);
+    }
+
+    // --- BlockedLog tests ---
+
+    #[test]
+    fn blocked_log_no_path_no_file() {
+        let log = new_blocked_log(None);
+        // Should not panic
+        log.lock().unwrap().record("example.com");
+    }
+
+    #[test]
+    fn blocked_log_records_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocked.log");
+        let path_str = path.to_str().unwrap();
+        let log = new_blocked_log(Some(path_str));
+        log.lock().unwrap().record("evil.com");
+        drop(log); // flush
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("evil.com"), "content: {content}");
+    }
+
+    #[test]
+    fn blocked_log_deduplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocked.log");
+        let path_str = path.to_str().unwrap();
+        let log = new_blocked_log(Some(path_str));
+        {
+            let mut guard = log.lock().unwrap();
+            guard.record("evil.com");
+            guard.record("evil.com");
+        }
+        drop(log);
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<_> = content.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines.len(), 1, "expected 1 line, got: {lines:?}");
+    }
+
+    #[test]
+    fn blocked_log_timestamp_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocked.log");
+        let path_str = path.to_str().unwrap();
+        let log = new_blocked_log(Some(path_str));
+        log.lock().unwrap().record("evil.com");
+        drop(log);
+        let content = std::fs::read_to_string(&path).unwrap();
+        let line = content.lines().next().unwrap();
+        // Format: 2026-03-13T14:23:01Z evil.com
+        assert!(line.len() > 20, "line too short: {line}");
+        let ts = &line[..20];
+        assert_eq!(&ts[4..5], "-");
+        assert_eq!(&ts[7..8], "-");
+        assert_eq!(&ts[10..11], "T");
+        assert_eq!(&ts[13..14], ":");
+        assert_eq!(&ts[16..17], ":");
+        assert_eq!(&ts[19..20], "Z");
+    }
+
+    #[test]
+    fn blocked_log_multiple_domains() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocked.log");
+        let path_str = path.to_str().unwrap();
+        let log = new_blocked_log(Some(path_str));
+        {
+            let mut guard = log.lock().unwrap();
+            guard.record("a.com");
+            guard.record("b.com");
+            guard.record("a.com"); // duplicate
+        }
+        drop(log);
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<_> = content.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines.len(), 2, "expected 2 lines, got: {lines:?}");
+    }
+
+    #[test]
+    fn blocked_log_creates_parent_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("dir").join("blocked.log");
+        let path_str = path.to_str().unwrap();
+        let log = new_blocked_log(Some(path_str));
+        log.lock().unwrap().record("evil.com");
+        drop(log);
+        assert!(path.exists(), "file should exist at nested path");
+    }
+
+    // --- load_merged_allowlist tests ---
+
+    #[test]
+    fn load_merged_no_session() {
+        let perm = write_temp("example.com\n");
+        let perm_path = perm.path().to_str().unwrap();
+        let al = load_merged_allowlist(perm_path, None);
+        assert!(al.contains("example.com"));
+        assert!(!al.contains("other.com"));
+    }
+
+    #[test]
+    fn load_merged_adds_session_entries() {
+        let perm = write_temp("a.com\n");
+        let session = write_temp("b.com\n");
+        let al = load_merged_allowlist(
+            perm.path().to_str().unwrap(),
+            Some(session.path().to_str().unwrap()),
+        );
+        assert!(al.contains("a.com"));
+        assert!(al.contains("b.com"));
+    }
+
+    #[test]
+    fn load_merged_session_missing_ok() {
+        let perm = write_temp("a.com\n");
+        let al = load_merged_allowlist(
+            perm.path().to_str().unwrap(),
+            Some("/nonexistent/session.txt"),
+        );
+        assert!(al.contains("a.com"));
+        // No panic, no error
+    }
+
+    #[test]
+    fn load_merged_session_wildcards() {
+        let perm = write_temp("example.com\n");
+        let session = write_temp("*.crates.io\n");
+        let al = load_merged_allowlist(
+            perm.path().to_str().unwrap(),
+            Some(session.path().to_str().unwrap()),
+        );
+        assert!(al.contains("static.crates.io"));
+        assert!(!al.contains("crates.io")); // wildcard doesn't match root
+    }
+
+    #[test]
+    fn reload_merged_picks_up_session_change() {
+        let perm = write_temp("a.com\n");
+        let session = write_temp("b.com\n");
+        let perm_path = perm.path().to_str().unwrap().to_string();
+        let session_path = session.path().to_str().unwrap().to_string();
+
+        let al = Arc::new(RwLock::new(load_merged_allowlist(
+            &perm_path,
+            Some(&session_path),
+        )));
+        assert!(!al.read().unwrap().contains("c.com"));
+
+        // Append to session file
+        std::fs::write(session.path(), "b.com\nc.com\n").unwrap();
+        reload_merged_allowlist(&al, &perm_path, Some(&session_path));
+
+        assert!(al.read().unwrap().contains("c.com"));
+    }
+
+    #[test]
+    fn reload_merged_session_none_ok() {
+        let perm = write_temp("a.com\n");
+        let perm_path = perm.path().to_str().unwrap().to_string();
+        let al = Arc::new(RwLock::new(load_merged_allowlist(&perm_path, None)));
+        // Should not panic
+        reload_merged_allowlist(&al, &perm_path, None);
+        assert!(al.read().unwrap().contains("a.com"));
+    }
+
+    // --- format_utc_now test ---
+
+    #[test]
+    fn format_utc_now_has_correct_shape() {
+        let ts = format_utc_now();
+        assert_eq!(ts.len(), 20, "timestamp should be 20 chars: {ts}");
+        assert_eq!(&ts[4..5], "-");
+        assert_eq!(&ts[7..8], "-");
+        assert_eq!(&ts[10..11], "T");
+        assert_eq!(&ts[19..20], "Z");
     }
 }
