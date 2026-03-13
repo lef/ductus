@@ -1,0 +1,21 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: proxy
+      - run: cargo fmt --check
+        working-directory: proxy
+      - run: cargo clippy -- -D warnings
+        working-directory: proxy
+      - run: cargo test
+        working-directory: proxy
