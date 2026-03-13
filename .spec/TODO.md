@@ -74,7 +74,7 @@ chore: add anyhow dependency
 - [x] L2 ルール名前空間修正（rules/<profile>/、contextus-claude contrib 済み）
 - [x] TDD HARD RULE を L1 に集約、L2 の重複削除（3 repos contrib 済み）
 - [x] contextus (L0) に層間互換性課題を記録
-- [ ] setup.sh の bats テスト追加（HARD RULE 適用: 実装したが tests なし）
+- [x] setup.sh の bats テスト追加（HARD RULE 適用: 実装したが tests なし）← tests/test-setup.sh 追加済み（2026-03-13）
 - [ ] tutus の symlink 構造を実ディレクトリに移行
 
 ## 参照
