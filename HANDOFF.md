@@ -70,6 +70,21 @@
 
 **tutus 側の対応**: `ductus-review` の上位版として全通信レビューフローを追加予定。
 
+## Feature Request: --blacklist フラグ（2026-03-14）
+
+**要求**: `--blacklist <path>` — 永久ブロックリスト。allowlist にあっても拒否する。
+
+**ユースケース（tutus 側）**:
+- `ductus-review` の `[i]gnore` コマンドで `~/.config/ductus/review-ignore.txt` に追記
+- ductus 起動時に `--blacklist ~/.config/ductus/review-ignore.txt` を渡す
+- → ignore したドメインがプロキシレベルで強制ブロックされる（UI スキップだけでなく実効性あり）
+
+**tutus 側の対応**:
+- `ductus-session.sh` で `DUCTUS_IGNORE_FILE` を `--blacklist` に渡す（フラグ実装後）
+- allowlist + session-allowlist に入れていてもここにあれば弾く動作を想定
+
+---
+
 ## Feature Request: 透過プロキシモード（2026-03-13）
 
 **要求**: HTTP_PROXY 設定不要で全通信をキャプチャする透過プロキシ。
