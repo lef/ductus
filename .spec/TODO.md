@@ -21,6 +21,13 @@
 - [x] tutus 統合（env.allowlist に HTTP_PROXY 系、sandbox script に proxy 確認）
 - [x] aarch64 MUSL binary ビルド確認・`~/.local/bin/ductus` に配置
 - [x] contextus-dev-rust を layers manifest に記録（`setup.sh --update` 対応）
+- [x] ホスト上での動作確認（curl で allow/block 両方確認）
+- [x] tutus HANDOFF に実動作確認タスクを投げ込み（tutus 側の仕事として記録）
+- [x] contextus-dev-rust に Rust コード編集時のモデル切り替えルールを追記
+
+## GitHub リリース（低優先度）
+
+- [ ] `git tag v0.1.0 && git push && git push --tags` で GitHub Actions release 初起動（急がない、free 枠節約）
 
 ## フェーズ1: パーソナルウェブアーカイブ（将来）
 
