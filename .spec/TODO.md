@@ -10,11 +10,17 @@
 - [x] 手動テスト: curl --proxy でブロック・通過の両方を確認 ✅
 - [x] load_allowlist のユニットテストを追加
 
-## フェーズ0.6: フェーズ0 改良（tutus 向け）
+## フェーズ0.6: フェーズ0 改良（tutus 向け）（完了）
 
 > フェーズ1は当面先。まずフェーズ0を tutus での実運用に耐えるレベルに改良する。（2026-03-13）
 
-- [ ] （要検討・ユーザーと相談）
+- [x] static binary ビルド（Cargo.toml release profile + Makefile で uname -m 自動検出）
+- [x] GitHub Actions（CI: fmt/clippy/test、release: tag v* → MUSL binary）
+- [x] ワイルドカード allowlist（`*.github.com` 形式、外部 crate 不要）
+- [x] SIGHUP リロード（`Arc<RwLock<Allowlist>>`、kill -HUP で再起動不要）
+- [x] tutus 統合（env.allowlist に HTTP_PROXY 系、sandbox script に proxy 確認）
+- [x] aarch64 MUSL binary ビルド確認・`~/.local/bin/ductus` に配置
+- [x] contextus-dev-rust を layers manifest に記録（`setup.sh --update` 対応）
 
 ## フェーズ1: パーソナルウェブアーカイブ（将来）
 

@@ -1,73 +1,71 @@
 # HANDOFF — Session Transition Notes
 
 **Last Updated**: 2026-03-13
-**Previous Work**: フェーズ0.5完了 + contextus エコシステム大規模 contrib
+**Previous Work**: フェーズ0.6完了（static binary / GitHub Actions / wildcard / SIGHUP / tutus 統合）
 
 ## Current State
 
 ### Completed (this session)
 
-**フェーズ0.5 完了（TDD）**:
-- RED: `parse_connect_target` 単体4件 + 統合4件（Compile RED 確認済み）
-- GREEN: lib.rs 分離、anyhow 導入、400/502 実装、全13テスト パス
-- REFACTOR: cargo fmt + clippy クリーン
+**contextus インフラ整備**:
+- setup.sh の bats テスト追加（contextus-claude `tests/test-setup.sh`）
+- tutus の symlink 構造を実ディレクトリに移行（`.claude -> .contextus/.claude` 廃止）
+- `.claude/.contextus/layers` に contextus-dev-rust を記録（`setup.sh --update` 対応）
 
-**contextus L0/L1 同期**:
-- safety-net.sh、dumpmem skill、agent-security.md、sdd.md 追加
-- settings.json に safety-net PreToolUse フック追記
-
-**contextus-dev-rust L2 インストール**:
-- rules/rust/ に13ファイル配置（L1 との名前空間分離）
-
-**contextus エコシステム contrib**:
-- SessionStart フック: .spec/ ファイルを自動 inject（contextus-claude）
-- setup.sh --update: L0/L1/L2+ 一括同期 + layers manifest（contextus-claude）
-- L2 名前空間修正: rules/<profile>/ でインストール（contextus-claude）
-- TDD HARD RULE: L1 tdd-guide に集約、L2 の重複削除（3 repos）
-- contextus (L0): 層間互換性課題を TODO.md に記録
-- contextus-dev-sh: testing.md 新規作成（bats TDD）
-- tutus: session-start.sh 同期済み
+**フェーズ0.6 完了（TDD）**:
+- static binary: `[profile.release]` + Makefile（`uname -m` で arch 自動検出）
+- GitHub Actions: CI（push/PR で fmt/clippy/test）+ release（tag v* で MUSL binary）
+- ワイルドカード allowlist: `Allowlist` struct + `wildcard_match()`（外部 crate 不要）
+- SIGHUP リロード: `Arc<RwLock<Allowlist>>`、`reload_allowlist()` 公開関数
+- tutus 統合: `env.allowlist` に HTTP_PROXY 系追加、sandbox script に proxy 確認
+- aarch64 MUSL binary ビルド確認・`~/.local/bin/ductus` に配置
+- 全 21 テスト GREEN（単体 17 + 統合 4）
 
 ### Not Started (priority order)
 
-1. **setup.sh の bats テスト追加** — HARD RULE 適用: 実装したがテストなし（TODO.md に記録済み）
-2. **tutus の symlink 構造を実ディレクトリに移行** — .claude -> .contextus/.claude を廃止
-3. **フェーズ1** — HTTPS インターセプト設計（SPEC.md 作成から、SDD ワークフロー）
+1. **フェーズ1** — HTTPS インターセプト設計（SPEC.md 作成から、SDD ワークフロー）
+2. **GitHub への push・tag**（`git tag v0.1.0 && git push && git push --tags`）でリリース binary を生成
+3. **tutus での実運用確認** — `HTTP_PROXY` を設定して sandbox を起動し実際に動作確認
 
 ## Next Session: Read First
 
-- `.spec/TODO.md` — contextus 改善タスクとフェーズ1が次
-- `proxy/src/lib.rs` — 現在の実装（フェーズ0.5完了後）
-- `proxy/README.md` — 403 仕様（BLOCKED:/ALLOWLIST: 形式）
+- `.spec/TODO.md` — フェーズ0.6 完了確認、次はフェーズ1
+- `proxy/src/lib.rs` — `Allowlist` struct + `reload_allowlist()` を含む現在の実装
+- `proxy/README.md` — 403 仕様と使い方
 
 ## Key Decisions Made
 
-- **TDD HARD RULE は L1 に集約**: L2 は言語固有の「どうやって」のみ
-- **/dumpmem と /handoff の使い分け**: 大量作業後は /dumpmem、セッション終了時は /handoff
-- **setup.sh --update**: layers manifest（.claude/.contextus/layers）で L2+ を記録
-- **L2 名前空間**: rules/<profile>/ サブディレクトリでインストール（L1 との衝突防止）
+- **ホストは aarch64**: x86_64-unknown-linux-musl はクロスコンパイルになりリンカエラー。Makefile で `uname -m` 自動検出
+- **`std::sync::RwLock`**: SIGHUP ハンドラの write は非同期 I/O なし → tokio 版不要
+- **tutus proxy 確認は警告のみ**: hard fail にしない（別 proxy の可能性もある）
+- **Rust コードを書く前はモデル変更を確認**: Rust コードが不要になったら戻せると伝える
 
 ## Blockers / Watch Out For
 
-- **setup.sh に bats テストがない**: HARD RULE 違反。次回優先でテスト追加が必要
-- **tutus の symlink**: .contextus/.claude/ 経由で直接 git add が必要（.claude/ 経由は失敗）
-- **contextus-dev-rust の .spec/TODO.md**: レビュー待ちルールが残っている
+- **GitHub Actions の release workflow 未実行**: リポジトリが GitHub に push されていないため未動作。tag を push して初めて確認できる
+- **tutus での実動作未確認**: proxy を実際に起動して sandbox から通信させるテストがまだ
 
 ## Changed Files (this session)
 
 **ductus**:
-- `proxy/src/lib.rs`: 新規（フェーズ0.5 — lib/bin 分離）
-- `proxy/src/main.rs`: 薄い CLI ラッパーに変更
-- `proxy/tests/proxy_test.rs`: 新規（統合テスト4件）
-- `proxy/Cargo.toml`: anyhow 追加
-- `.claude/agents/tdd-guide.md`: HARD RULE 追記（sync）
-- `.claude/rules/rust/testing.md`: HARD RULE 削除（L1 に集約）
-- `.claude/setup.sh`: --update フラグ追加（sync）
-- `.spec/KNOWLEDGE.md`: セッション後半の発見を追記
-- `.spec/TODO.md`: contextus 改善タスク追記
+- `proxy/Cargo.toml`: `[profile.release]` 追加
+- `proxy/Makefile`: 新規（build-static、verify-static、uname -m 自動検出）
+- `.github/workflows/ci.yml`: 新規
+- `.github/workflows/release.yml`: 新規
+- `proxy/src/lib.rs`: `Allowlist` struct、`wildcard_match()`、`reload_allowlist()`、`Arc<RwLock<Allowlist>>`
+- `proxy/src/main.rs`: `RwLock` ラップ、SIGHUP タスク追加
+- `proxy/tests/proxy_test.rs`: `spawn_proxy()` を tempfile + `RwLock` ベースに更新
+- `.claude/.contextus/layers`: 新規（contextus-dev-rust 記録）
+- `.spec/KNOWLEDGE.md`: フェーズ0.6 の発見を追記
+- `.spec/TODO.md`: フェーズ0.6 チェックリスト完了
 
-**contextus-claude**: session-start.sh、setup.sh、tdd-guide.md、TODO.md
-**contextus-dev-rust**: testing.md（HARD RULE 削除）
-**contextus-dev-sh**: testing.md 新規作成
-**contextus (L0)**: .spec/TODO.md 新規作成（層間互換性課題）
-**tutus**: session-start.sh 同期
+**tutus**:
+- `scripts/env.allowlist`: HTTP_PROXY 系追加
+- `scripts/claude-sandbox.sh`: proxy 稼働確認ブロック追加
+- `scripts/aider-sandbox.sh`: proxy 稼働確認ブロック追加
+- `.claude/`: symlink から実ディレクトリに移行（`.contextus/.claude/` → `.claude/`）
+- `.spec/`: 同上
+- `HANDOFF.md`: 同上（symlink → 実ファイル）
+
+**contextus-claude**:
+- `tests/test-setup.sh`: 新規（record_layer/read_layers/apply_layer のユニットテスト）

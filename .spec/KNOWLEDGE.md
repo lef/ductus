@@ -74,6 +74,30 @@
 - `/dumpmem`: コンテキストが大きくなったとき、大量の作業後の包括保存
 - 今回のように多くの contrib を行ったあとは `/handoff` ではなく `/dumpmem`
 
+## フェーズ0.6 完了（2026-03-13）
+
+### 実装内容
+- **static binary**: `[profile.release]` に lto/strip/panic=abort。Makefile で `uname -m` 自動検出 → `$(ARCH)-unknown-linux-musl`
+- **GitHub Actions**: CI（fmt/clippy/test on push/PR）+ release（tag v* → MUSL binary をリリースに添付）
+- **ワイルドカード allowlist**: `Allowlist { exact: HashSet, wildcards: Vec }` + `wildcard_match()`。外部 crate 不要、`*.`prefix のみ対応（YAGNI）
+- **SIGHUP リロード**: `Arc<RwLock<Allowlist>>`。`std::sync::RwLock`（write lock を `.await` の前に必ずドロップ）。`reload_allowlist()` を公開関数として切り出しユニットテスト可能に
+- **tutus 統合**: `env.allowlist` に HTTP_PROXY 系追加。`claude-sandbox.sh`/`aider-sandbox.sh` に proxy 稼働確認ブロック（警告のみ、hard fail なし）
+
+### 技術的発見
+- **ホストが aarch64**: WSL2 環境が ARM。x86_64-unknown-linux-musl はクロスコンパイルになりリンカエラー（`cc: error: unrecognized command-line option '-m64'`）。Makefile で `uname -m` 自動検出が正解
+- **`std::sync::RwLock` vs `tokio::sync::RwLock`**: SIGHUP ハンドラの write は非同期 I/O なし → `std::sync::RwLock` で十分。read guard も `.await` 前に必ずブロックスコープでドロップ
+- **`--clap version` サポートなし**: clap の derive マクロで `version` を明示しないと `--version` フラグが生成されない（`Usage: ductus [OPTIONS]` のみ）
+- **`.git/objects/` に root 所有ディレクトリ混入**: PreCompact フックが root で `git add -A` を実行したことで発生。`sudo chown -R lef:lef .git/objects/` で修正
+- **contextus-dev-rust の layers 記録漏れ**: `.claude/.contextus/layers` が存在せず `setup.sh --update` で L2 が再同期されなかった。今回追加
+
+### 設計決定
+| 決定 | 理由 | 日付 |
+|---|---|---|
+| `Allowlist` struct（HashSet を置き換え）| 型変更で wildcard/exact を統一的に扱える | 2026-03-13 |
+| `std::sync::RwLock`（tokio 版でなく） | write lock を `.await` またぎなし。シンプル | 2026-03-13 |
+| Makefile で `uname -m` 自動検出 | 環境に応じたターゲットを自動選択 | 2026-03-13 |
+| tutus 統合は「警告のみ」 | proxy が別のアドレスの可能性もあり hard fail は過剰 | 2026-03-13 |
+
 ## Rejected Approaches
 
 - `--permission-mode auto` on sandbox: サーバー依存・root 制限あり → `bypassPermissions` + non-root が正解（tutus 側で解決済み）
