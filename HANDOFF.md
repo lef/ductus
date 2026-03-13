@@ -115,6 +115,35 @@ sudo -u "$REAL_USER" ~/.local/bin/ductus \
 
 ---
 
+## tutus からの追加依頼: ポート指定 localhost allowlist（将来機能）
+
+**依頼元**: tutus セッション 2026-03-13（security design review）
+
+**背景**: 現行 ductus の allowlist はホスト名レベルのみ。`localhost` 全体を許可すると
+sandbox エージェントがローカルの任意のサービス（DB、内部 API 等）に到達できるため、
+tutus 側では `ductus-allow` スクリプトでローカルアドレスを**全面ブロック**している。
+
+**ユースケース（将来）**: 開発中の API サーバー（`localhost:3000`）をエージェントが呼ぶ場合、
+`localhost:3000` だけ許可して他のローカルポートはブロックしたい。
+
+**必要な機能**:
+- allowlist に `localhost:3000` 形式（hostname:port）を記述できるようにする
+- CONNECT トンネルの `host:port` とマッチング
+- `localhost` 単体（ポートなし）は引き続き禁止（全ポート開放になる）
+- ワイルドカードポート（`localhost:*`）も禁止（趣旨に反する）
+
+**セキュリティ要件（必須）**:
+- ポート指定は必須。`localhost` 丸ごとの許可は永久に不可
+- `0.0.0.0`, `127.*.*.*`, `::1` も同様にポート指定なしは禁止
+
+**tutus 側の連携**:
+この機能が実装されたら `ductus-allow` の localhost ガードを
+「localhost:PORT 形式は許可」に緩和する（tutus/scripts/ductus-allow の guard を更新）。
+
+**優先度**: 低（現在のユースケースでは不要。将来 agent に DB 呼ばせたい場合）
+
+---
+
 ## Next Session: Read First
 
 - `.spec/TODO.md` — 現状確認
