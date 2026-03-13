@@ -75,7 +75,7 @@ chore: add anyhow dependency
 - [x] TDD HARD RULE を L1 に集約、L2 の重複削除（3 repos contrib 済み）
 - [x] contextus (L0) に層間互換性課題を記録
 - [x] setup.sh の bats テスト追加（HARD RULE 適用: 実装したが tests なし）← tests/test-setup.sh 追加済み（2026-03-13）
-- [ ] tutus の symlink 構造を実ディレクトリに移行
+- [x] tutus の symlink 構造を実ディレクトリに移行（2026-03-13）
 
 ## 参照
 
