@@ -1,4 +1,5 @@
-MUSL_TARGET = x86_64-unknown-linux-musl
+ARCH        := $(shell uname -m)
+MUSL_TARGET  = $(ARCH)-unknown-linux-musl
 BINARY      = target/$(MUSL_TARGET)/release/ductus
 
 .PHONY: build build-static verify-static test
