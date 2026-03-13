@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::io::Write;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -6,11 +6,18 @@ use tokio::net::{TcpListener, TcpStream};
 /// Spawn the proxy accept loop on a random port.
 /// Returns the assigned port.
 async fn spawn_proxy(allowed: &[&str]) -> u16 {
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    for host in allowed {
+        writeln!(tmp, "{host}").unwrap();
+    }
+    tmp.flush().unwrap();
+    let allowlist_path = tmp.path().to_str().unwrap().to_string();
+    let allowlist = Arc::new(ductus::load_allowlist(&allowlist_path));
+    let allowlist_path = Arc::new(allowlist_path);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let allowlist: HashSet<String> = allowed.iter().map(|s| s.to_string()).collect();
-    let allowlist = Arc::new(allowlist);
-    let allowlist_path = Arc::new("allowlist.txt".to_string());
+    // Leak the tempfile handle to keep it alive for the test
+    let _keep = Box::leak(Box::new(tmp));
     tokio::spawn(async move {
         ductus::run(listener, allowlist, allowlist_path).await;
     });
