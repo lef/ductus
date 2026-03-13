@@ -54,3 +54,26 @@
 - `proxy/src/lib.rs`: `BlockedLog`, `load_merged_allowlist`, `reload_merged_allowlist`, `format_utc_now`, `is_leap` 追加。`run()`/`handle()`/`handle_inner()` に `blocked_log` 引数追加。unit tests 13件追加
 - `proxy/src/main.rs`: `--session-allowlist`, `--blocked-log`, `--pidfile` フラグ追加。`load_merged_allowlist` 使用。SIGHUP ハンドラを `reload_merged_allowlist` に変更
 - `proxy/tests/proxy_test.rs`: `spawn_proxy_with_opts()` 追加。integration tests 5件追加
+
+## Feature Request: 全通信の audit log（2026-03-13）
+
+**要求**: `--audit-log` オプション — ブロックしたものだけでなく、全 CONNECT リクエストを記録する。
+
+**ユースケース**:
+- 新規ツールを sandbox で初めて動かす際、そのツールが接続を試みた全ドメインを把握する
+- 「怪しいツールが密かに通信している先」を洗い出す（拡張機能のデータ盗難検知等）
+- allowlist 登録前の審査フローとして使う
+
+**現状との差分**:
+- `--blocked-log`: ブロックされたドメインのみ記録（既存）
+- `--audit-log`: 許可・ブロック両方の全 CONNECT を記録（新規）
+
+**tutus 側の対応**: `ductus-review` の上位版として全通信レビューフローを追加予定。
+
+## Feature Request: 透過プロキシモード（2026-03-13）
+
+**要求**: HTTP_PROXY 設定不要で全通信をキャプチャする透過プロキシ。
+
+**ユースケース**:
+- proxy 設定を無視するツールの通信も捕捉できる
+- 「怪しいツールが密かに通信している先」を完全に洗い出す
