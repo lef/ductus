@@ -55,6 +55,36 @@
 - `proxy/src/main.rs`: `--session-allowlist`, `--blocked-log`, `--pidfile` フラグ追加。`load_merged_allowlist` 使用。SIGHUP ハンドラを `reload_merged_allowlist` に変更
 - `proxy/tests/proxy_test.rs`: `spawn_proxy_with_opts()` 追加。integration tests 5件追加
 
+## Feature Request: ポート自動割り当て + stdout 返却（2026-03-16）
+
+**要求**: `--port 0` で OS に空きポートを割り当てさせ、実際の bind ポートを stdout に返す。
+
+**ユースケース（tutus 側）**:
+- 複数 sandbox を同時起動する際、各 ductus が別ポートで動く必要がある
+- 現状は `ductus-session.sh` がシェル側で `ss` ループでポートスキャンしている（ダサい）
+- `--port 0` → ductus が stdout に `8081` と返す → caller がそのポートを `HTTP_PROXY` に設定
+
+**合わせて改善すべき点**:
+- graceful shutdown: SIGTERM で clean に終了（現状 `kill` で止めてる）
+- `--pidfile` は既に実装済み。これと組み合わせれば `kill $(cat pidfile)` で graceful に停止可能
+
+**tutus 側の現状の回避策（2026-03-16 実装済み）**:
+```bash
+# ductus-session.sh のシェル側ポートスキャン
+DUCTUS_PORT=8080
+while ss -tlnH "sport = :${DUCTUS_PORT}" | grep -q LISTEN; do
+    DUCTUS_PORT=$((DUCTUS_PORT + 1))
+done
+```
+
+**理想の姿**:
+```bash
+DUCTUS_PORT=$(ductus --port 0 --allowlist ... --daemon)
+export HTTP_PROXY="http://127.0.0.1:${DUCTUS_PORT}"
+```
+
+---
+
 ## Feature Request: 全通信の audit log（2026-03-13）
 
 **要求**: `--audit-log` オプション — ブロックしたものだけでなく、全 CONNECT リクエストを記録する。

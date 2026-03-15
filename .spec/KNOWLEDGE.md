@@ -98,6 +98,37 @@
 | Makefile で `uname -m` 自動検出 | 環境に応じたターゲットを自動選択 | 2026-03-13 |
 | tutus 統合は「警告のみ」 | proxy が別のアドレスの可能性もあり hard fail は過剰 | 2026-03-13 |
 
+## 複数 sandbox 同時起動とポート競合（2026-03-16 tutus 側で発見）
+
+### 問題
+
+tutus で複数 sandbox を同時起動すると、全 sandbox が同じ ductus（port 8080）を共有する。
+各 sandbox が別の allowlist/設定で動くべき場合、ductus もセッション毎に独立すべき。
+
+### tutus 側の暫定対策（実装済み）
+
+`ductus-session.sh` でシェル側ポートスキャン:
+```bash
+DUCTUS_PORT=8080
+while ss -tlnH "sport = :${DUCTUS_PORT}" | grep -q LISTEN; do
+    DUCTUS_PORT=$((DUCTUS_PORT + 1))
+done
+```
+
+### ductus 側で実装すべきこと
+
+1. `--port 0`: OS に空きポートを割り当てさせる（`TcpListener::bind("0.0.0.0:0")`）
+2. bind 成功後、実際のポート番号を stdout に出力（`listener.local_addr().port()`）
+3. graceful shutdown: SIGTERM で clean に終了（現状 `kill` で止めてる）
+
+理想:
+```bash
+DUCTUS_PORT=$(ductus --port 0 --allowlist ... --daemon)
+export HTTP_PROXY="http://127.0.0.1:${DUCTUS_PORT}"
+# ... sandbox 実行 ...
+kill $(cat /tmp/ductus.pid)  # graceful shutdown
+```
+
 ## Rejected Approaches
 
 - `--permission-mode auto` on sandbox: サーバー依存・root 制限あり → `bypassPermissions` + non-root が正解（tutus 側で解決済み）
