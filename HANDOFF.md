@@ -24,10 +24,13 @@
 
 ### Not Started (priority order)
 
-1. **tutus 側の `ductus-session.sh` 更新** — 新フラグを使う起動コマンドに変更（tutus repo の仕事）
-2. **GitHub リリース**（低優先度）— `git tag v0.1.0 && git push && git push --tags`
-3. **ポート指定 localhost 許可**（低優先度）— `localhost:3000` 形式の allowlist エントリ対応
-4. **フェーズ1** — HTTPS インターセプト設計。当面先
+1. **`--port 0` + stdout 返却**（今月）— OS に空きポート割り当て、実際のポートを stdout に返す。tutus の ss ループを置換
+2. **graceful shutdown** — SIGTERM で clean に終了（`--pidfile` と組み合わせ）
+3. **tutus 側の `ductus-session.sh` 更新** — 新フラグ（--session-allowlist 等）を使う起動コマンドに変更（tutus repo の仕事）
+4. **`--blacklist`** — 永久ブロックリスト。allowlist にあっても拒否
+5. **GitHub リリース**（低優先度）— `git tag v0.1.0 && git push && git push --tags`
+6. **`--audit-log`** — 全 CONNECT リクエストを記録（許可・ブロック両方）
+7. **フェーズ1** — HTTPS インターセプト設計。当面先
 
 ## Next Session: Read First
 
