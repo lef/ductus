@@ -45,9 +45,20 @@
 - **`run()` に `blocked_log` を渡す設計**: 各 `handle_inner()` 呼び出しで直接ログを取る
 - **既存 `reload_allowlist` はそのまま残す**: `reload_merged_allowlist` を追加し、`main.rs` は後者を使う
 
+## Rust 開発環境の改善（tutus からの依頼 2026-03-17）
+
+ductus の Rust 開発を tutus sandbox 内で行うための前提条件:
+
+- **~/.rustup/ ~/.cargo/ の bind mount 永続化** — tutus 側の実装が必要
+- **~/.cargo/bin のセキュリティ判断** — 実行ファイル注入リスクと永続化のトレードオフ
+- Rust 永続化が完了すれば、ductus 開発（--port 0, --blacklist, --audit-log 等）を
+  sandbox 内で dogfooding できる
+- 優先度: ductus 新フラグ対応の前に Rust 永続化が必要（前提条件）
+
 ## Blockers / Watch Out For
 
 - GitHub Actions release は未実行（push していない）
+- Rust 永続化が完了するまで、ductus のコード変更はホスト側で実施
 - tutus の `ductus-session.sh` はまだ旧コマンド（`--session-allowlist` 等なし）で動作中
   - 現状でも動く（新フラグはオプション）。tutus セッションで更新すればよい
 - `Text file busy` エラー: ductus が起動中のまま `cp` すると失敗する。`pkill ductus` してから
