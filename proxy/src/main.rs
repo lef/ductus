@@ -15,8 +15,10 @@ struct Args {
     session_allowlist: Option<String>,
     #[arg(long)]
     blocked_log: Option<String>,
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_pidfile")]
     pidfile: Option<String>,
+    #[arg(long, conflicts_with = "pidfile")]
+    no_pidfile: bool,
 }
 
 #[derive(Deserialize, Default)]
@@ -53,36 +55,50 @@ async fn main() -> anyhow::Result<()> {
 
     let blocked_log = ductus::new_blocked_log(args.blocked_log.as_deref());
 
-    // Write pidfile if requested
-    if let Some(ref pidfile) = args.pidfile {
+    // Write pidfile (default: /tmp/ductus.pid, disable with --no-pidfile)
+    let effective_pidfile = if args.no_pidfile {
+        None
+    } else {
+        Some(
+            args.pidfile
+                .unwrap_or_else(|| "/tmp/ductus.pid".to_string()),
+        )
+    };
+    if let Some(ref pidfile) = effective_pidfile {
         let pid = std::process::id();
         std::fs::write(pidfile, pid.to_string())
             .map_err(|e| anyhow::anyhow!("failed to write pidfile {pidfile}: {e}"))?;
     }
 
-    // Reload allowlist on SIGHUP
+    // Reload allowlist on SIGHUP — install handler eagerly (before accept loop)
+    // to prevent default SIGHUP action (terminate) from killing the process
     let al_sig = allowlist.clone();
     let perm_path_sig = allowlist_path.clone();
     let session_path_sig = args.session_allowlist.map(Arc::new);
     let session_sig = session_path_sig.clone();
-    tokio::spawn(async move {
-        let mut sig = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
-            .expect("failed to install SIGHUP handler");
-        loop {
-            sig.recv().await;
-            eprintln!(":: SIGHUP — reloading allowlist");
-            ductus::reload_merged_allowlist(
-                &al_sig,
-                &perm_path_sig,
-                session_sig.as_ref().map(|s| s.as_str()),
-            );
-            eprintln!(":: allowlist reloaded");
+    match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+        Ok(mut sig) => {
+            tokio::spawn(async move {
+                loop {
+                    sig.recv().await;
+                    eprintln!(":: SIGHUP — reloading allowlist");
+                    ductus::reload_merged_allowlist(
+                        &al_sig,
+                        &perm_path_sig,
+                        session_sig.as_ref().map(|s| s.as_str()),
+                    );
+                    eprintln!(":: allowlist reloaded");
+                }
+            });
         }
-    });
+        Err(e) => {
+            eprintln!(":: warning: failed to install SIGHUP handler: {e}");
+        }
+    }
 
     // Graceful shutdown on SIGTERM
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        .expect("failed to install SIGTERM handler");
+        .map_err(|e| anyhow::anyhow!("failed to install SIGTERM handler: {e}"))?;
     ductus::run(
         listener,
         allowlist,
@@ -96,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     .await;
 
     // Clean up pidfile
-    if let Some(ref pidfile) = args.pidfile {
+    if let Some(ref pidfile) = effective_pidfile {
         let _ = std::fs::remove_file(pidfile);
     }
     Ok(())

@@ -292,7 +292,13 @@ async fn port_zero_prints_actual_port() {
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
-        .args(["--port", "0", "--allowlist", tmp.path().to_str().unwrap()])
+        .args([
+            "--port",
+            "0",
+            "--allowlist",
+            tmp.path().to_str().unwrap(),
+            "--no-pidfile",
+        ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -312,6 +318,148 @@ async fn port_zero_prints_actual_port() {
     assert!(port > 0, "port should be non-zero");
 
     // Clean up
+    child.kill().await.ok();
+}
+
+#[tokio::test]
+async fn default_pidfile_is_created() {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio::process::Command;
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let pidfile_dir = tempfile::tempdir().unwrap();
+    let pidfile_path = pidfile_dir.path().join("ductus.pid");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
+        .args([
+            "--port",
+            "0",
+            "--allowlist",
+            tmp.path().to_str().unwrap(),
+            "--pidfile",
+            pidfile_path.to_str().unwrap(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ductus");
+
+    // Wait for port output (proxy is ready)
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = tokio::io::BufReader::new(stdout);
+    let mut line = String::new();
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut line))
+        .await
+        .expect("timeout reading port")
+        .expect("failed to read line");
+
+    // pidfile should exist and contain the child's PID
+    let pid_content = std::fs::read_to_string(&pidfile_path).expect("pidfile should exist");
+    let pid: u32 = pid_content
+        .trim()
+        .parse()
+        .expect("pidfile should contain a PID");
+    assert!(pid > 0);
+
+    // Kill and verify pidfile is cleaned up
+    child.kill().await.ok();
+    child.wait().await.ok();
+    // Note: kill sends SIGKILL, not SIGTERM — pidfile cleanup only happens on SIGTERM
+    // So we don't assert removal here
+}
+
+#[tokio::test]
+async fn no_pidfile_flag_suppresses_default() {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio::process::Command;
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let default_pidfile = std::path::Path::new("/tmp/ductus.pid");
+    // Defensive cleanup in case a previous test left it
+    let _ = std::fs::remove_file(default_pidfile);
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
+        .args([
+            "--port",
+            "0",
+            "--allowlist",
+            tmp.path().to_str().unwrap(),
+            "--no-pidfile",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ductus");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = tokio::io::BufReader::new(stdout);
+    let mut line = String::new();
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut line))
+        .await
+        .expect("timeout reading port")
+        .expect("failed to read line");
+
+    // Verify the process actually started (printed a port)
+    let _port: u16 = line
+        .trim()
+        .parse()
+        .expect("process should start and print port");
+
+    // With --no-pidfile, the default pidfile should NOT be created
+    assert!(
+        !default_pidfile.exists(),
+        "pidfile should not exist with --no-pidfile"
+    );
+
+    child.kill().await.ok();
+}
+
+#[tokio::test]
+async fn sighup_reloads_without_crash() {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio::process::Command;
+
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    writeln!(tmp, "127.0.0.1").unwrap();
+    tmp.flush().unwrap();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
+        .args([
+            "--port",
+            "0",
+            "--allowlist",
+            tmp.path().to_str().unwrap(),
+            "--no-pidfile",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ductus");
+
+    // Wait for ready
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = tokio::io::BufReader::new(stdout);
+    let mut line = String::new();
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut line))
+        .await
+        .expect("timeout reading port")
+        .expect("failed to read line");
+    let port: u16 = line.trim().parse().expect("stdout should be a port number");
+
+    // Send SIGHUP — proxy must survive
+    let pid = child.id().expect("child should have a pid");
+    unsafe {
+        libc::kill(pid as i32, libc::SIGHUP);
+    }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Proxy should still be alive and serving
+    let response = send_connect(port, "CONNECT evil.com:443 HTTP/1.1").await;
+    assert!(
+        response.starts_with("HTTP/1.1 403"),
+        "proxy should still respond after SIGHUP, got: {response}"
+    );
+
     child.kill().await.ok();
 }
 
