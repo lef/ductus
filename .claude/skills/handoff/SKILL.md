@@ -53,6 +53,21 @@ git add HANDOFF.md
 git diff --cached --quiet || git commit -m "docs: update HANDOFF.md"
 ```
 
+4. REPOS 内の dirty repos もコミット（sandbox で REPOS= 指定時のみ）:
+```bash
+if [ -n "${SANDBOX_REPOS_DIR:-}" ] && [ -d "$SANDBOX_REPOS_DIR" ]; then
+    for repo in "$SANDBOX_REPOS_DIR"/*/; do
+        [ -d "$repo/.git" ] || continue
+        cd "$repo"
+        git status --short
+    done
+fi
+```
+各 dirty repo について変更内容をレビューし、意味のあるメッセージで commit。
+`.claude/settings.local.json` 等のセンシティブなファイルは commit しない。
+
+5. 全 repos 同期: `/sync-repos --all` の手順を実行する。
+
 ## Notes
 
 - Write for your next self: assume zero context from this session

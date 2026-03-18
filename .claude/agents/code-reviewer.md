@@ -3,6 +3,7 @@ name: code-reviewer
 description: コードレビューの専門家。コード変更後に自動的に使用。品質、セキュリティ、保守性を確認する。
 tools: Read, Grep, Glob, Bash
 model: opus
+permissionMode: plan
 ---
 
 # Code Reviewer

@@ -1,8 +1,9 @@
 ---
 name: planner
 description: 実装計画の専門家。複雑な機能やリファクタリングの詳細な実装計画を作成する。機能追加やアーキテクチャ変更の前に使用。
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 model: opus
+permissionMode: plan
 ---
 
 # Planner

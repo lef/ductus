@@ -3,6 +3,7 @@ name: security-reviewer
 description: セキュリティ脆弱性の検出と修正。コード変更後やコミット前に自動的に使用する。
 tools: Read, Grep, Glob, Bash
 model: opus
+permissionMode: plan
 ---
 
 # Security Reviewer

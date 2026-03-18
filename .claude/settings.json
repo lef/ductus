@@ -3,7 +3,7 @@
   "enableAllProjectMcpServers": false,
   "statusLine": {
     "type": "command",
-    "command": "sh -c '$HOME/.claude/statusline.sh'"
+    "command": "sh -c 'CLAUDE_STATUSLINE_BADGE=${CLAUDE_STATUSLINE_BADGE:-🏜} CLAUDE_STATUSLINE_HIDE=${CLAUDE_STATUSLINE_HIDE:-cost} $HOME/.claude/statusline.sh'"
   },
   "permissions": {
     "deny": [
@@ -49,6 +49,24 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/trace-log.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == \"Edit\" || tool == \"Write\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/workflow-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/safety-net.sh"
           }
         ]
@@ -70,6 +88,10 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/session-start.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/session-banner.sh"
           }
         ]
       }
