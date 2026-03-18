@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::future::Future;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -198,24 +199,37 @@ pub fn parse_connect_target(request_line: &str) -> Option<String> {
 }
 
 /// Runs the proxy accept loop on the given listener.
+///
+/// Accepts connections until the `shutdown` future resolves, then returns.
+/// In-flight connections are not drained — they are dropped when the
+/// tokio runtime shuts down.
 pub async fn run(
     listener: TcpListener,
     allowlist: Arc<RwLock<Allowlist>>,
     allowlist_path: Arc<String>,
     blocked_log: Arc<Mutex<BlockedLog>>,
+    shutdown: impl Future<Output = ()>,
 ) {
+    tokio::pin!(shutdown);
     loop {
-        match listener.accept().await {
-            Ok((stream, _)) => {
-                tokio::spawn(handle(
-                    stream,
-                    allowlist.clone(),
-                    allowlist_path.clone(),
-                    blocked_log.clone(),
-                ));
+        tokio::select! {
+            result = listener.accept() => {
+                match result {
+                    Ok((stream, _)) => {
+                        tokio::spawn(handle(
+                            stream,
+                            allowlist.clone(),
+                            allowlist_path.clone(),
+                            blocked_log.clone(),
+                        ));
+                    }
+                    Err(e) => {
+                        eprintln!("accept error: {e}");
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("accept error: {e}");
+            _ = &mut shutdown => {
+                break;
             }
         }
     }

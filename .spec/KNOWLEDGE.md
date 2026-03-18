@@ -14,6 +14,9 @@
 | lib.rs + main.rs 分離 | 統合テストから `ductus::run()` を呼ぶために必要。main.rs は薄い CLI ラッパーに | 2026-03-13 |
 | 403 ボディを key-value 形式に | `BLOCKED: <host>` / `ALLOWLIST: <path>` の2行。echo コマンド埋め込みはコマンド注入に見えるため廃止 | 2026-03-13 |
 | contextus-dev-rust rules を `rules/rust/` に配置 | L1 の汎用ルールと分離するためサブディレクトリに | 2026-03-13 |
+| `run()` に shutdown signal 引数追加 | graceful shutdown + テスタビリティ。`impl Future<Output = ()>` で柔軟性確保 | 2026-03-18 |
+| port 0 時のみ stdout にポート出力 | 既存の利用者のスクリプトを壊さない。stderr のログは常に actual_port を使う | 2026-03-18 |
+| Opus 4.6 1M でモデル切り替え不要に | Rust 開発時の Sonnet→Opus 切り替えルールは非アクティブ化。コスト最適化時のみ | 2026-03-18 |
 
 ## Technical Findings
 
@@ -128,6 +131,34 @@ export HTTP_PROXY="http://127.0.0.1:${DUCTUS_PORT}"
 # ... sandbox 実行 ...
 kill $(cat /tmp/ductus.pid)  # graceful shutdown
 ```
+
+## sandbox 内 Rust 開発環境の確認（2026-03-18）
+
+**HANDOFF の「persistent overlay 未実装」は解消済み。** sandbox 内で Rust 開発が完全動作する:
+
+- rustc 1.94.0 (stable-aarch64-unknown-linux-gnu)
+- MUSL ターゲット: aarch64-unknown-linux-musl インストール済み
+- cargo, clippy, rustfmt すべて動作
+- `~/.cargo/env` を source すれば PATH に cargo bin が追加される
+- ductus 自身がプロキシとして動作中（HTTP_PROXY=http://127.0.0.1:8080）
+- crates.io へのアクセスも proxy 経由で動作確認済み
+- `~/repos/` に contextus-dev-rust 等のクローンあり — 直接 contribution 可能
+
+## --port 0 + graceful shutdown 実装（2026-03-18）
+
+**TDD フロー（t_wada 方式）で実装:**
+
+1. Compile RED: `run()` に 5 引数渡すテスト3件 → コンパイルエラー
+2. GREEN: `run()` に `shutdown: impl Future<Output = ()>` 追加、`tokio::select!` で accept loop
+3. REFACTOR: cargo fmt + clippy クリーン
+
+**テスト追加**: 3件（run_returns_on_shutdown, proxy_serves_then_shuts_down, port_zero_prints_actual_port）
+**合計**: 42 テスト（unit 30 + integration 12）
+
+**技術的発見**:
+- `std::future::pending::<()>()` — 「永遠に resolve しない」future。既存テストの shutdown 引数に最適（ゼロコスト）
+- `tokio::pin!(shutdown)` — `impl Future` を `select!` で使うには pin が必要
+- `env!("CARGO_BIN_EXE_ductus")` — cargo test が自動設定するバイナリパス。統合テストでバイナリを直接起動可能
 
 ## Rejected Approaches
 

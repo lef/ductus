@@ -1,5 +1,6 @@
 use std::io::Write;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -50,7 +51,14 @@ async fn spawn_proxy_with_opts(
     let port = listener.local_addr().unwrap().port();
     let perm_file = Box::new(tmp);
     tokio::spawn(async move {
-        ductus::run(listener, allowlist, allowlist_path, blocked_log).await;
+        ductus::run(
+            listener,
+            allowlist,
+            allowlist_path,
+            blocked_log,
+            std::future::pending::<()>(),
+        )
+        .await;
     });
     (
         port,
@@ -210,6 +218,101 @@ async fn blocked_domain_logged_once() {
         "expected 1 line (dedup), got {}: {lines:?}",
         lines.len()
     );
+}
+
+// --- Graceful shutdown tests ---
+
+#[tokio::test]
+async fn run_returns_on_shutdown() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let allowlist = Arc::new(RwLock::new(ductus::load_allowlist("/dev/null")));
+    let allowlist_path = Arc::new(String::new());
+    let blocked_log = ductus::new_blocked_log(None);
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+    let handle = tokio::spawn(async move {
+        ductus::run(listener, allowlist, allowlist_path, blocked_log, async {
+            let _ = rx.await;
+        })
+        .await;
+    });
+
+    // Signal shutdown
+    let _ = tx.send(());
+    // run() should return within a reasonable time
+    tokio::time::timeout(Duration::from_secs(2), handle)
+        .await
+        .expect("run() did not return after shutdown signal")
+        .unwrap();
+}
+
+#[tokio::test]
+async fn proxy_serves_then_shuts_down() {
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+    // Spawn proxy with shutdown channel
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    writeln!(tmp, "127.0.0.1").unwrap();
+    tmp.flush().unwrap();
+    let perm_path = tmp.path().to_str().unwrap().to_string();
+    let allowlist = Arc::new(RwLock::new(ductus::load_allowlist(&perm_path)));
+    let allowlist_path = Arc::new(perm_path);
+    let blocked_log = ductus::new_blocked_log(None);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let handle = tokio::spawn(async move {
+        ductus::run(listener, allowlist, allowlist_path, blocked_log, async {
+            let _ = rx.await;
+        })
+        .await;
+    });
+
+    // Send a request — should get 403 (127.0.0.1 is allowed but evil.com is not)
+    let response = send_connect(port, "CONNECT evil.com:443 HTTP/1.1").await;
+    assert!(
+        response.starts_with("HTTP/1.1 403"),
+        "expected 403, got: {response}"
+    );
+
+    // Now shutdown
+    let _ = tx.send(());
+    tokio::time::timeout(Duration::from_secs(2), handle)
+        .await
+        .expect("run() did not return after shutdown signal")
+        .unwrap();
+}
+
+// --- Port 0 stdout test ---
+
+#[tokio::test]
+async fn port_zero_prints_actual_port() {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio::process::Command;
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
+        .args(["--port", "0", "--allowlist", tmp.path().to_str().unwrap()])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ductus");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = tokio::io::BufReader::new(stdout);
+    let mut line = String::new();
+
+    // Should get a port number on the first line
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut line))
+        .await
+        .expect("timeout reading port from stdout")
+        .expect("failed to read line");
+
+    let port: u16 = line.trim().parse().expect("stdout should be a port number");
+    assert!(port > 0, "port should be non-zero");
+
+    // Clean up
+    child.kill().await.ok();
 }
 
 #[tokio::test]

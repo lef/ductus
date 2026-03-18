@@ -25,6 +25,17 @@
 - [x] tutus HANDOFF に実動作確認タスクを投げ込み（tutus 側の仕事として記録）
 - [x] contextus-dev-rust に Rust コード編集時のモデル切り替えルールを追記
 
+## フェーズ0.7: ポート自動割り当て + graceful shutdown（完了）
+
+> tutus で複数 sandbox 同時起動時のポート競合を解消する。（2026-03-18）
+
+- [x] `--port 0` で OS に空きポート割り当て + stdout に実ポート出力
+- [x] graceful shutdown: SIGTERM で accept loop 停止 + pidfile クリーンアップ
+- [x] `run()` に `shutdown: impl Future<Output = ()>` 引数追加
+- [x] テスト3件追加（shutdown 2件 + port 0 1件）— 合計42テスト
+- [x] contextus-dev-rust 同期（Model Switching ルール更新: Opus 4.6 1M で不要に）
+- [x] cargo fmt + clippy クリーン
+
 ## GitHub リリース（低優先度）
 
 - [ ] `git tag v0.1.0 && git push && git push --tags` で GitHub Actions release 初起動（急がない、free 枠節約）

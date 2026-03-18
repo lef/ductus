@@ -45,7 +45,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .map_err(|e| anyhow::anyhow!("failed to bind to port {port}: {e}"))?;
-    eprintln!(":: ductus listening on :{port}");
+    let actual_port = listener.local_addr()?.port();
+    if port == 0 {
+        println!("{actual_port}");
+    }
+    eprintln!(":: ductus listening on :{actual_port}");
 
     let blocked_log = ductus::new_blocked_log(args.blocked_log.as_deref());
 
@@ -76,6 +80,24 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    ductus::run(listener, allowlist, allowlist_path, blocked_log).await;
+    // Graceful shutdown on SIGTERM
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("failed to install SIGTERM handler");
+    ductus::run(
+        listener,
+        allowlist,
+        allowlist_path,
+        blocked_log,
+        async move {
+            sigterm.recv().await;
+            eprintln!(":: SIGTERM received — shutting down");
+        },
+    )
+    .await;
+
+    // Clean up pidfile
+    if let Some(ref pidfile) = args.pidfile {
+        let _ = std::fs::remove_file(pidfile);
+    }
     Ok(())
 }

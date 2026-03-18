@@ -3,6 +3,16 @@
 Guidelines specific to AI agents writing Rust code.
 Based on: Microsoft Pragmatic Rust Guidelines, RustAssistant research, rust-skills community rules.
 
+## Model Switching for Rust Code
+
+> **2026-03-18 更新**: Opus 4.6 (1M context) の登場により、Rust 開発時のモデル切り替えは
+> 基本的に不要になった。1M context で Rust コードの読み書きに十分な能力がある。
+> コスト最適化が必要な場合のみ、以下のルールを適用する。
+
+コスト最適化モード（オプション）:
+- Rust コードを書く必要が生じたら：**ユーザーにモデル切り替えを提案してから**実装を開始する
+- Rust コードが不要になったら：**その旨をユーザーに伝える**
+
 ## Person-Name Technique for Better Instruction Accuracy
 
 Naming experts when giving Claude instructions dramatically improves accuracy:
