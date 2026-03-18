@@ -9,6 +9,8 @@ struct Args {
     config: String,
     #[arg(long)]
     port: Option<u16>,
+    #[arg(long, default_value = "127.0.0.1")]
+    bind: String,
     #[arg(long)]
     allowlist: Option<String>,
     #[arg(long)]
@@ -44,14 +46,15 @@ async fn main() -> anyhow::Result<()> {
         &allowlist_path,
         args.session_allowlist.as_deref(),
     )));
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
+    let bind = &args.bind;
+    let listener = TcpListener::bind(format!("{bind}:{port}"))
         .await
-        .map_err(|e| anyhow::anyhow!("failed to bind to port {port}: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to bind to {bind}:{port}: {e}"))?;
     let actual_port = listener.local_addr()?.port();
     if port == 0 {
         println!("{actual_port}");
     }
-    eprintln!(":: ductus listening on :{actual_port}");
+    eprintln!(":: ductus listening on {bind}:{actual_port}");
 
     let blocked_log = ductus::new_blocked_log(args.blocked_log.as_deref());
 

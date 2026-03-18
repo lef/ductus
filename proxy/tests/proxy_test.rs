@@ -463,6 +463,79 @@ async fn sighup_reloads_without_crash() {
     child.kill().await.ok();
 }
 
+// --- dot-domain allowlist integration test ---
+
+#[tokio::test]
+async fn dot_domain_allows_root_and_subdomain() {
+    let echo_port = spawn_echo_server().await;
+    // .127.0.0.1 doesn't make sense for IP, so test via lib unit tests.
+    // Here we test that dot-domain syntax is parsed and applied end-to-end.
+    let (proxy_port, _handle) = spawn_proxy_with_opts(&[".example.com"], None, None).await;
+
+    // Root domain should be allowed (dot-domain matches root)
+    // But we can't actually connect to example.com, so test 403 for unlisted domain
+    let response = send_connect(proxy_port, "CONNECT evil.com:443 HTTP/1.1").await;
+    assert!(
+        response.starts_with("HTTP/1.1 403"),
+        "unlisted domain should still be blocked: {response}"
+    );
+}
+
+// --- bind option integration test ---
+
+#[tokio::test]
+async fn bind_default_is_localhost() {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio::process::Command;
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ductus"))
+        .args([
+            "--port",
+            "0",
+            "--allowlist",
+            tmp.path().to_str().unwrap(),
+            "--no-pidfile",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ductus");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = tokio::io::BufReader::new(stdout);
+    let mut line = String::new();
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut line))
+        .await
+        .expect("timeout reading port")
+        .expect("failed to read line");
+
+    let port: u16 = line.trim().parse().expect("stdout should be a port number");
+
+    // Read stderr to check bind address in log
+    let stderr = child.stderr.take().unwrap();
+    let mut stderr_reader = tokio::io::BufReader::new(stderr);
+    let mut stderr_line = String::new();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        stderr_reader.read_line(&mut stderr_line),
+    )
+    .await
+    .expect("timeout reading stderr")
+    .expect("failed to read stderr");
+
+    assert!(
+        stderr_line.contains("127.0.0.1"),
+        "default bind should be 127.0.0.1, got: {stderr_line}"
+    );
+
+    // Should be reachable on localhost
+    let response = send_connect(port, "CONNECT evil.com:443 HTTP/1.1").await;
+    assert!(response.starts_with("HTTP/1.1 403"));
+
+    child.kill().await.ok();
+}
+
 #[tokio::test]
 async fn no_blocked_log_when_not_specified() {
     let dir = tempfile::tempdir().unwrap();

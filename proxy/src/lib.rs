@@ -4,19 +4,24 @@ use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
-/// A domain allowlist supporting exact matches and wildcard patterns.
+/// A domain allowlist supporting exact matches, wildcard, and dot-domain patterns.
 ///
-/// Wildcard entries use the `*.example.com` format and match any subdomain
-/// of the specified domain (but not the domain itself).
+/// Syntax:
+///   `example.com`    — exact match only
+///   `*.example.com`  — subdomains only (RFC 6125 compliant, NOT root)
+///   `.example.com`   — root domain + all subdomains (Squid/Nginx convention)
 pub struct Allowlist {
     exact: HashSet<String>,
     wildcards: Vec<String>,
+    dot_domains: Vec<String>,
 }
 
 impl Allowlist {
     /// Checks if the given domain is permitted by this allowlist.
     pub fn contains(&self, domain: &str) -> bool {
-        self.exact.contains(domain) || self.wildcards.iter().any(|p| wildcard_match(p, domain))
+        self.exact.contains(domain)
+            || self.wildcards.iter().any(|p| wildcard_match(p, domain))
+            || self.dot_domains.iter().any(|d| dot_domain_match(d, domain))
     }
 }
 
@@ -34,14 +39,30 @@ fn wildcard_match(pattern: &str, domain: &str) -> bool {
     }
 }
 
+/// Matches a `.suffix` (dot-domain) pattern against a domain.
+///
+/// `.github.com` matches both `github.com` (root) and `api.github.com` (subdomain),
+/// but not `github.com.evil.com`. Follows Squid/Nginx convention.
+fn dot_domain_match(pattern: &str, domain: &str) -> bool {
+    let base = &pattern[1..]; // strip leading dot
+    domain == base
+        || (domain.ends_with(base)
+            && domain.len() > base.len()
+            && domain.as_bytes()[domain.len() - base.len() - 1] == b'.')
+}
+
 /// Loads a domain allowlist from a file.
 ///
 /// Lines starting with `#` are comments. Inline comments after `#` are stripped.
-/// Entries starting with `*` are treated as wildcard patterns.
+/// Syntax:
+///   `example.com`    — exact match only
+///   `*.example.com`  — subdomains only (RFC 6125)
+///   `.example.com`   — root domain + all subdomains (Squid/Nginx convention)
 /// Returns an empty allowlist if the file does not exist.
 pub fn load_allowlist(path: &str) -> Allowlist {
     let mut exact = HashSet::new();
     let mut wildcards = Vec::new();
+    let mut dot_domains = Vec::new();
     for entry in std::fs::read_to_string(path)
         .unwrap_or_default()
         .lines()
@@ -50,11 +71,17 @@ pub fn load_allowlist(path: &str) -> Allowlist {
     {
         if entry.starts_with("*.") {
             wildcards.push(entry);
+        } else if entry.starts_with('.') {
+            dot_domains.push(entry);
         } else {
             exact.insert(entry);
         }
     }
-    Allowlist { exact, wildcards }
+    Allowlist {
+        exact,
+        wildcards,
+        dot_domains,
+    }
 }
 
 /// Reloads the allowlist from disk, replacing the current contents.
@@ -79,6 +106,7 @@ pub fn load_merged_allowlist(permanent: &str, session: Option<&str>) -> Allowlis
         let session_al = load_allowlist(session_path);
         al.exact.extend(session_al.exact);
         al.wildcards.extend(session_al.wildcards);
+        al.dot_domains.extend(session_al.dot_domains);
     }
     al
 }
@@ -406,6 +434,43 @@ mod tests {
         assert!(al.contains("api.github.com"));
         assert!(al.contains("example.com"));
         assert!(!al.contains("github.com"));
+    }
+
+    // --- Dot-domain allowlist tests (.example.com = root + subdomains) ---
+
+    #[test]
+    fn dot_domain_matches_root() {
+        let al = allowlist_from_str(".github.com\n");
+        assert!(al.contains("github.com"));
+    }
+
+    #[test]
+    fn dot_domain_matches_subdomain() {
+        let al = allowlist_from_str(".github.com\n");
+        assert!(al.contains("api.github.com"));
+    }
+
+    #[test]
+    fn dot_domain_does_not_match_other() {
+        let al = allowlist_from_str(".github.com\n");
+        assert!(!al.contains("evil.com"));
+    }
+
+    #[test]
+    fn dot_domain_no_bypass() {
+        let al = allowlist_from_str(".github.com\n");
+        assert!(!al.contains("github.com.evil.com"));
+    }
+
+    #[test]
+    fn load_allowlist_parses_dot_domains() {
+        let al = allowlist_from_str(".github.com\nexample.com\n*.crates.io\n");
+        assert!(al.contains("github.com"));
+        assert!(al.contains("api.github.com"));
+        assert!(al.contains("example.com"));
+        assert!(!al.contains("sub.example.com"));
+        assert!(al.contains("index.crates.io"));
+        assert!(!al.contains("crates.io"));
     }
 
     // --- reload_allowlist tests ---

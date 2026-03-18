@@ -1,3 +1,9 @@
-# allowed hosts (host only, no port)
+# Allowlist syntax:
+#   example.com     — exact match only
+#   *.example.com   — subdomains only (NOT root domain, per RFC 6125)
+#   .example.com    — root domain + all subdomains (Squid/Nginx convention)
+#
+# Lines starting with # are comments. Inline comments after # are stripped.
+
 example.com
 api.github.com
