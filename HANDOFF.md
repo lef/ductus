@@ -21,15 +21,23 @@
 
 - **ductus バイナリ更新**: リリースビルド完了済み。ホスト側で旧バイナリを差し替えて再起動が必要
 
+### In Progress
+
+- **Sandbox Credential Architecture 設計完了**: Option D Hybrid (FG-PAT + OAuth injection → SELinux/AppArmor)
+  - 設計文書: `.claude/plans/gleaming-zooming-bengio.md`
+  - KNOWLEDGE.md に要約記録済み
+  - 次のアクション: ホスト側で手動 push → FG-PAT setup script 実装 → claude-sandbox.sh 修正
+
 ### Not Started (priority order)
 
-1. **gh CLI 導入**: allowlist に `.github.com` + `.githubusercontent.com` 追加済み（ホスト側）。バイナリ更新後にインストール可能
-2. **git push**: ローカルに 5+ コミットが溜まっている。gh 導入後に push
-3. **tutus `ductus-session.sh` 更新**: `--bind`, `--no-pidfile`, `--port 0` 対応。現在は ss ループでポートスキャン中
+1. **FG-PAT setup script**: `ductus-gh-setup.sh` を tutus に追加。per-project token 管理
+2. **claude-sandbox.sh GH auth**: bind-ro で `~/.config/gh/` を注入
+3. **tutus `ductus-session.sh` 更新**: `--bind`, `--no-pidfile`, `--port 0` 対応
 4. **`--blacklist`** — 永久ブロックリスト
 5. **`--audit-log`** — 全 CONNECT リクエストを記録
-6. **透過プロキシモード** — HTTP_PROXY 不要で全通信キャプチャ
-7. **フェーズ1** — HTTPS インターセプト設計
+6. **SELinux/AppArmor credential isolation**: 全 agent binary の credential process restriction
+7. **透過プロキシモード** — HTTP_PROXY 不要で全通信キャプチャ
+8. **フェーズ1** — HTTPS インターセプト設計
 
 ## Next Session: Read First
 

@@ -21,6 +21,8 @@
 | pidfile デフォルト `/tmp/ductus.pid` | `--pidfile` オプション → デフォルト ON + `--no-pidfile` で無効化。pgrep の誤爆防止 | 2026-03-18 |
 | `--bind` デフォルト `127.0.0.1` | `0.0.0.0` は外部からプロキシとして使える。安全側に倒す | 2026-03-18 |
 | `.example.com` dot-domain 記法導入 | Squid/Nginx 慣習。`*.example.com`（RFC 6125: サブドメインのみ）のセマンティクスは変えず、新記法で root+subdomains をカバー | 2026-03-18 |
+| Socket forwarding (Option A) を却下 | SSH agent/Docker socket hijacking が既知の攻撃ベクター。socket は認可を持たず、sandbox 内の任意プロセスが利用可能 | 2026-03-18 |
+| Sandbox credential architecture: Option D Hybrid | Phase 1: OAuth file injection + FG-PAT、Phase 2: SELinux/AppArmor で全 credential を process-restricted に。Phase 2 が最終ゴール | 2026-03-18 |
 
 ## Technical Findings
 
@@ -183,6 +185,20 @@ kill $(cat /tmp/ductus.pid)  # graceful shutdown
 - `std::future::pending::<()>()` — 「永遠に resolve しない」future。既存テストの shutdown 引数に最適（ゼロコスト）
 - `tokio::pin!(shutdown)` — `impl Future` を `select!` で使うには pin が必要
 - `env!("CARGO_BIN_EXE_ductus")` — cargo test が自動設定するバイナリパス。統合テストでバイナリを直接起動可能
+
+## Sandbox Credential Architecture（2026-03-18 設計）
+
+詳細は `.claude/plans/gleaming-zooming-bengio.md` 参照。
+
+**根本原則**: sandbox 内から push が必要（sandbox は死ぬ、sandbox は大量生産される、コンテキストは sandbox 内にしかない）。ホスト側 watcher はコンテキストを持たないため push を主導できない。
+
+**credential 分類**: Agent cred (.claude.json) は既に sandbox 内にある。GH cred だけ排除しても脅威モデルの本質は同じ。ただし GH cred は supply chain attack に直結するため最重。
+
+**段階的設計 (Option D)**:
+- Phase 1: FG-PAT（fine-grained PAT、repo 限定・短期限）+ OAuth file injection（既存パターン踏襲）
+- Phase 2: SELinux/AppArmor で全 credential を process-restricted（`gh` → GH cred、`claude` → Agent cred、等）
+
+**却下: Socket forwarding** — SSH agent hijacking、Docker socket escape が実証済み。socket は認可(authorization)を持たない。攻撃面が増えるだけ。
 
 ## Rejected Approaches
 
