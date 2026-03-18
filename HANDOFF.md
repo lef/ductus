@@ -45,20 +45,25 @@
 - **`run()` に `blocked_log` を渡す設計**: 各 `handle_inner()` 呼び出しで直接ログを取る
 - **既存 `reload_allowlist` はそのまま残す**: `reload_merged_allowlist` を追加し、`main.rs` は後者を使う
 
-## Rust 開発環境の改善（tutus からの依頼 2026-03-17）
+## Rust 開発環境（2026-03-18 設計更新）
 
-ductus の Rust 開発を tutus sandbox 内で行うための前提条件:
+**旧方式（却下）**: ホスト ~/.rustup/ を bind mount → ホスト最小化原則違反
+**新方式（確定）**: sandbox 内で完全自己完結（persistent overlay + PERSISTENT_HOME）
 
-- **~/.rustup/ ~/.cargo/ の bind mount 永続化** — tutus 側の実装が必要
-- **~/.cargo/bin のセキュリティ判断** — 実行ファイル注入リスクと永続化のトレードオフ
-- Rust 永続化が完了すれば、ductus 開発（--port 0, --blacklist, --audit-log 等）を
-  sandbox 内で dogfooding できる
-- 優先度: ductus 新フラグ対応の前に Rust 永続化が必要（前提条件）
+```
+Layer 1: apt-get install curl（persistent overlay に永続化）
+Layer 2: curl https://sh.rustup.rs | sh → ~/.rustup/ ~/.cargo/（$HOME に永続化）
+```
+
+- ホストに Rust 不要（最終的にはホストからも rustup を除去可能）
+- ductus allowlist に `sh.rustup.rs` + `static.rust-lang.org` の追加が必要
+- persistent overlay は tutus 側で実装予定（TODO Phase 4）
+- **persistent overlay が実装されるまで**: ホスト側で開発 or ホスト bind mount で暫定対応
 
 ## Blockers / Watch Out For
 
+- **persistent overlay 未実装**: tutus 側の実装待ち。これが ductus sandbox 内開発の前提
 - GitHub Actions release は未実行（push していない）
-- Rust 永続化が完了するまで、ductus のコード変更はホスト側で実施
 - tutus の `ductus-session.sh` はまだ旧コマンド（`--session-allowlist` 等なし）で動作中
   - 現状でも動く（新フラグはオプション）。tutus セッションで更新すればよい
 - `Text file busy` エラー: ductus が起動中のまま `cp` すると失敗する。`pkill ductus` してから
