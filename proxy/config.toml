@@ -1,2 +1,3 @@
+# port = 0 lets the OS assign a free port (actual port printed to stdout)
 port = 8080
 allowlist = "allowlist.txt"

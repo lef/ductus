@@ -90,9 +90,9 @@ ALLOWLIST: <allowlist_path>
 
 ## スコープ外（将来対応）
 
-- ワイルドカード / glob マッチ
-- allowlist のホットリロード（SIGHUP等）
-- HTTPS 証明書検証
+- ~~ワイルドカード / glob マッチ~~ → フェーズ0.6 で実装済み（`*.example.com` 形式）
+- ~~allowlist のホットリロード（SIGHUP等）~~ → フェーズ0.6 で実装済み
+- HTTPS 証明書検証（フェーズ1）
 - 認証（Proxy-Authorization）
 
 ---
@@ -135,3 +135,61 @@ ALLOWLIST: <allowlist_path>
 
 - すべての `pub(crate)` アイテムに `///` doc comment
 - 非自明なロジックに `//`（CONNECT ヘッダードレイン、domain 抽出の `:` 分割）
+
+---
+
+## フェーズ0.6: tutus 実運用改良
+
+**目的**: tutus sandbox での実運用に耐えるレベルに引き上げる。
+
+### 追加 CLI フラグ
+
+| フラグ | 用途 |
+|---|---|
+| `--session-allowlist <path>` | 第2の allowlist（セッション固有、SIGHUP でリロード） |
+| `--blocked-log <path>` | ブロックドメインをタイムスタンプ付きでログ |
+| `--pidfile <path>` | 起動時に PID をファイルに書く |
+
+### 追加機能
+
+- **ワイルドカード allowlist**: `*.github.com` 形式。`*.`prefix のみ（外部 crate 不要）
+- **SIGHUP リロード**: `Arc<RwLock<Allowlist>>`。permanent + session を同時リロード
+- **static binary**: MUSL ターゲット、`[profile.release]` で lto/strip/panic=abort
+- **GitHub Actions**: CI（fmt/clippy/test）+ release（tag v* → MUSL binary）
+
+---
+
+## フェーズ0.7: ポート自動割り当て + graceful shutdown
+
+**目的**: 複数 sandbox 同時起動時のポート競合を解消し、clean な停止を実現する。
+
+### `--port 0`
+
+- OS に空きポートを割り当てさせる（`TcpListener::bind("0.0.0.0:0")`）
+- bind 成功後、実際のポート番号を **stdout** に出力（`println!("{actual_port}")`）
+- `--port 0` の場合のみ stdout に出力（既存スクリプト互換性維持）
+- stderr のログ（`:: ductus listening on :XXXX`）は常に actual_port を使用
+
+**使用例**:
+```bash
+DUCTUS_PORT=$(ductus --port 0 --allowlist /tmp/allow.txt --pidfile /tmp/ductus.pid &)
+export HTTP_PROXY="http://127.0.0.1:${DUCTUS_PORT}"
+```
+
+### graceful shutdown
+
+- `run()` に `shutdown: impl Future<Output = ()>` 引数を追加
+- accept loop を `tokio::select!` に変更:
+  - `listener.accept()` と `shutdown` を同時待ち
+  - shutdown が resolve → `break`（accept loop 停止）
+- `main.rs` で SIGTERM ハンドラを作成し `run()` に渡す
+- `run()` 戻り後に pidfile を自動削除
+- in-flight 接続は drain しない（tokio runtime 終了時に drop）
+
+### テスト
+
+| テスト名 | 内容 |
+|---|---|
+| `run_returns_on_shutdown` | oneshot で shutdown signal → `run()` が返る |
+| `proxy_serves_then_shuts_down` | リクエスト処理後に shutdown → 正常終了 |
+| `port_zero_prints_actual_port` | バイナリ起動 → stdout からポート読み取り |

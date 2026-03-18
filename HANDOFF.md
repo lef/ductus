@@ -1,22 +1,18 @@
 # HANDOFF — Session Transition Notes
 
-**Last Updated**: 2026-03-13
-**Previous Work**: hybrid allowlist Rust 実装（--session-allowlist / --blocked-log / --pidfile）
+**Last Updated**: 2026-03-18
+**Previous Work**: --port 0 auto-assign + graceful shutdown (SIGTERM) + contextus-dev-rust 同期
 
 ## Current State
 
 ### Completed (this session)
 
-- **hybrid allowlist 実装**: tutus からの依頼を TDD で実装（t_wada 方式）
-  - `--session-allowlist <path>` — 第2の allowlist、SIGHUP で永続と一緒にリロード
-  - `--blocked-log <path>` — ブロックドメインをタイムスタンプ付きでログ（in-memory 重複排除）
-  - `--pidfile <path>` — 起動時に自 PID をファイルに書く
-  - `BlockedLog` 構造体（`Arc<Mutex<>>`で共有）
-  - `load_merged_allowlist` / `reload_merged_allowlist` 追加
-  - chrono 不使用の手書き UTC フォーマット（`SystemTime` + 手計算）
-- **全 39 テスト GREEN**（unit 30 + integration 9）— 既存21件維持、新規18件追加
-- **static binary 再ビルド＋インストール**（`~/.local/bin/ductus`）
-  - `--help` で3フラグが確認済み
+- **`--port 0` + stdout 返却**: OS に空きポート割り当て、実ポートを stdout に出力
+- **graceful shutdown**: SIGTERM で accept loop 停止 + pidfile 自動削除
+- **`run()` 署名変更**: `shutdown: impl Future<Output = ()>` 引数追加、`tokio::select!` で accept loop
+- **テスト3件追加**（合計42テスト: unit 30 + integration 12）
+- **contextus-dev-rust 同期**: Model Switching ルール更新（Opus 4.6 1M で基本不要に）
+- **sandbox 環境確認**: Rust 1.94.0 が sandbox 内で完全動作（persistent overlay 解消済み）
 
 ### In Progress
 
@@ -24,85 +20,50 @@
 
 ### Not Started (priority order)
 
-1. **`--port 0` + stdout 返却**（今月）— OS に空きポート割り当て、実際のポートを stdout に返す。tutus の ss ループを置換
-2. **graceful shutdown** — SIGTERM で clean に終了（`--pidfile` と組み合わせ）
-3. ~~tutus 側の `ductus-session.sh` 更新~~ — **完了済み**（tutus commit 16b667f で --session-allowlist, --blocked-log, --pidfile 対応済み）
-4. **`--blacklist`** — 永久ブロックリスト。allowlist にあっても拒否
-5. **GitHub リリース**（低優先度）— `git tag v0.1.0 && git push && git push --tags`
-6. **`--audit-log`** — 全 CONNECT リクエストを記録（許可・ブロック両方）
-7. **フェーズ1** — HTTPS インターセプト設計。当面先
+1. **`--blacklist`** — 永久ブロックリスト。allowlist にあっても拒否
+2. **`--audit-log`** — 全 CONNECT リクエストを記録（許可・ブロック両方）
+3. **GitHub リリース**（低優先度）— `git tag v0.1.0 && git push && git push --tags`
+4. **tutus 側 `ductus-session.sh` 更新** — `--port 0` + graceful shutdown 対応
+5. **透過プロキシモード** — HTTP_PROXY 不要で全通信キャプチャ
+6. **フェーズ1** — HTTPS インターセプト設計。当面先
 
 ## Next Session: Read First
 
 - `.spec/TODO.md` — 現状確認
-- tutus HANDOFF に `ductus-session.sh` 更新依頼を入れる（まだなら）
-- `ductus --help` で `--session-allowlist`, `--blocked-log`, `--pidfile` が出ることを確認
+- `ductus --help` で全フラグ確認
+- tutus HANDOFF に `--port 0` + SIGTERM 対応の依頼を入れる
 
 ## Key Decisions Made
 
 - **chrono 非依存の UTC フォーマット**: `SystemTime` + 手計算。外部 crate 追加不要
 - **`BlockedLog` は `Arc<Mutex<>>`（tokio 版でなく）**: ファイル書き込みは sync、`.await` またがない
-- **`run()` に `blocked_log` を渡す設計**: 各 `handle_inner()` 呼び出しで直接ログを取る
-- **既存 `reload_allowlist` はそのまま残す**: `reload_merged_allowlist` を追加し、`main.rs` は後者を使う
+- **`run()` に `shutdown: impl Future<Output = ()>`**: テスタビリティ + 柔軟性。テストは `oneshot` や `pending()` を渡せる
+- **port 0 時のみ stdout 出力**: 既存スクリプトの互換性維持。stderr のログは常に actual_port
+- **in-flight 接続の drain なし**: shutdown 時は accept loop のみ停止。spawned tasks は runtime 終了時に drop（現状十分）
+- **Opus 4.6 1M でモデル切り替え不要**: contextus-dev-rust のルールは「コスト最適化モード」として残した
 
-## Rust 開発環境（2026-03-18 設計更新）
+## Rust 開発環境（2026-03-18 確認済み）
 
-**旧方式（却下）**: ホスト ~/.rustup/ を bind mount → ホスト最小化原則違反
-**新方式（確定）**: sandbox 内で完全自己完結（persistent overlay + PERSISTENT_HOME）
-
-```
-Layer 1: apt-get install curl（persistent overlay に永続化）
-Layer 2: curl https://sh.rustup.rs | sh → ~/.rustup/ ~/.cargo/（$HOME に永続化）
-```
-
-- ホストに Rust 不要（最終的にはホストからも rustup を除去可能）
-- ductus allowlist に `sh.rustup.rs` + `static.rust-lang.org` の追加が必要
-- persistent overlay は tutus 側で実装予定（TODO Phase 4）
-- **persistent overlay が実装されるまで**: ホスト側で開発 or ホスト bind mount で暫定対応
+**sandbox 内で完全動作**:
+- rustc 1.94.0 + aarch64-unknown-linux-musl ターゲット
+- `source ~/.cargo/env` で PATH 設定
+- ductus 自身がプロキシとして動作中（HTTP_PROXY=http://127.0.0.1:8080）
+- `~/repos/` に contextus-dev-rust 等あり — 直接 contribution 可能
 
 ## Blockers / Watch Out For
 
-- **persistent overlay 未実装**: tutus 側の実装待ち。これが ductus sandbox 内開発の前提
 - GitHub Actions release は未実行（push していない）
-- tutus の `ductus-session.sh` はまだ旧コマンド（`--session-allowlist` 等なし）で動作中
-  - 現状でも動く（新フラグはオプション）。tutus セッションで更新すればよい
 - `Text file busy` エラー: ductus が起動中のまま `cp` すると失敗する。`pkill ductus` してから
+- tutus の `ductus-session.sh` は `--port 0` 未対応（まだ ss ループでポートスキャン中）
 
-## Changed Files
+## Changed Files (this session)
 
-- `proxy/src/lib.rs`: `BlockedLog`, `load_merged_allowlist`, `reload_merged_allowlist`, `format_utc_now`, `is_leap` 追加。`run()`/`handle()`/`handle_inner()` に `blocked_log` 引数追加。unit tests 13件追加
-- `proxy/src/main.rs`: `--session-allowlist`, `--blocked-log`, `--pidfile` フラグ追加。`load_merged_allowlist` 使用。SIGHUP ハンドラを `reload_merged_allowlist` に変更
-- `proxy/tests/proxy_test.rs`: `spawn_proxy_with_opts()` 追加。integration tests 5件追加
-
-## Feature Request: ポート自動割り当て + stdout 返却（2026-03-16）
-
-**要求**: `--port 0` で OS に空きポートを割り当てさせ、実際の bind ポートを stdout に返す。
-
-**ユースケース（tutus 側）**:
-- 複数 sandbox を同時起動する際、各 ductus が別ポートで動く必要がある
-- 現状は `ductus-session.sh` がシェル側で `ss` ループでポートスキャンしている（ダサい）
-- `--port 0` → ductus が stdout に `8081` と返す → caller がそのポートを `HTTP_PROXY` に設定
-
-**合わせて改善すべき点**:
-- graceful shutdown: SIGTERM で clean に終了（現状 `kill` で止めてる）
-- `--pidfile` は既に実装済み。これと組み合わせれば `kill $(cat pidfile)` で graceful に停止可能
-
-**tutus 側の現状の回避策（2026-03-16 実装済み）**:
-```bash
-# ductus-session.sh のシェル側ポートスキャン
-DUCTUS_PORT=8080
-while ss -tlnH "sport = :${DUCTUS_PORT}" | grep -q LISTEN; do
-    DUCTUS_PORT=$((DUCTUS_PORT + 1))
-done
-```
-
-**理想の姿**:
-```bash
-DUCTUS_PORT=$(ductus --port 0 --allowlist ... --daemon)
-export HTTP_PROXY="http://127.0.0.1:${DUCTUS_PORT}"
-```
-
----
+- `proxy/src/lib.rs`: `run()` に `shutdown` 引数追加、`tokio::select!` で accept loop
+- `proxy/src/main.rs`: SIGTERM ハンドラ、`--port 0` stdout 出力、pidfile クリーンアップ
+- `proxy/tests/proxy_test.rs`: shutdown テスト2件 + port 0 テスト1件追加
+- `.claude/rules/rust/ai-agent-rust.md`: Model Switching セクション更新
+- `.spec/KNOWLEDGE.md`: 新決定事項 + sandbox 環境確認 + 実装記録
+- `.spec/TODO.md`: フェーズ0.7 セクション追加
 
 ## Feature Request: 全通信の audit log（2026-03-13）
 

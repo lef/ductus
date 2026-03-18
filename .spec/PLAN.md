@@ -29,10 +29,21 @@ Rust で HTTP CONNECT プロキシを実装する。約50行。
 このループにより、sandbox 環境で許可ドメインを AI 自身が育てていく。
 403 レスポンスは AI が解釈できる構造化された内容でなければならない。
 
+## フェーズ進行
+
+| Phase | 内容 | 状態 |
+|---|---|---|
+| 0 | 基本 CONNECT proxy（~50行） | 完了 |
+| 0.5 | TDD + エラーハンドリング改善 | 完了 |
+| 0.6 | tutus 実運用（session-allowlist, wildcard, SIGHUP, static binary） | 完了 |
+| 0.7 | `--port 0` auto-assign + graceful shutdown (SIGTERM) | 完了 |
+| — | `--blacklist`, `--audit-log` | 未着手 |
+| 1 | HTTPS インターセプト（パーソナルアーカイブ） | 将来 |
+
 ## Constraints（フェーズ0）
 
 - domain allowlist で許可ドメインのみ通す
-- 実装は ~50行 Rust に収める
+- 実装は ~50行 Rust に収める（現在は lib.rs ~640行 + main.rs ~100行に成長）
 
 ## Open Questions（フェーズ0時点で解決済み）
 
