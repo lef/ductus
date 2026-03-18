@@ -36,6 +36,27 @@
 - [x] contextus-dev-rust 同期（Model Switching ルール更新: Opus 4.6 1M で不要に）
 - [x] cargo fmt + clippy クリーン
 
+## フェーズ0.8: セキュリティ硬化 + UX 改善（完了）
+
+> SIGHUP で sandbox が死ぬ問題の修正 + allowlist UX 改善。（2026-03-18）
+
+- [x] SIGHUP ハンドラ race condition 修正（signal 登録を spawn の外に移動）
+- [x] signal `.expect()` 除去（SIGHUP: match+warning、SIGTERM: `?` 伝播）
+- [x] pidfile デフォルト `/tmp/ductus.pid`（`--no-pidfile` で無効化）
+- [x] `--bind` オプション追加（デフォルト `127.0.0.1`、安全側）
+- [x] `.example.com` dot-domain 記法（root + subdomains、Squid/Nginx 慣習）
+- [x] allowlist.txt に記法ドキュメント追記
+- [x] テスト追加 — 合計52テスト（unit 35 + integration 17）
+- [x] cargo fmt + clippy クリーン
+
+## 未着手（優先度順）
+
+- [ ] `--blacklist` — 永久ブロックリスト。allowlist にあっても拒否
+- [ ] `--audit-log` — 全 CONNECT リクエストを記録（許可・ブロック両方）
+- [ ] tutus `ductus-session.sh` 更新 — `--bind`, `--no-pidfile`, `--port 0` 対応
+- [ ] gh CLI を sandbox に導入（allowlist に `.github.com` + `.githubusercontent.com` 追加済み）
+- [ ] `git push` — ローカルに溜まったコミットを push
+
 ## GitHub リリース（低優先度）
 
 - [ ] `git tag v0.1.0 && git push && git push --tags` で GitHub Actions release 初起動（急がない、free 枠節約）

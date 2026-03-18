@@ -17,6 +17,10 @@
 | `run()` に shutdown signal 引数追加 | graceful shutdown + テスタビリティ。`impl Future<Output = ()>` で柔軟性確保 | 2026-03-18 |
 | port 0 時のみ stdout にポート出力 | 既存の利用者のスクリプトを壊さない。stderr のログは常に actual_port を使う | 2026-03-18 |
 | Opus 4.6 1M でモデル切り替え不要に | Rust 開発時の Sonnet→Opus 切り替えルールは非アクティブ化。コスト最適化時のみ | 2026-03-18 |
+| SIGHUP ハンドラは spawn の外で登録 | `tokio::signal::unix::signal()` を `tokio::spawn` 内で呼ぶとハンドラ登録がスケジュール依存になり、登録前にシグナルが届くとデフォルト動作（terminate）が発動する | 2026-03-18 |
+| pidfile デフォルト `/tmp/ductus.pid` | `--pidfile` オプション → デフォルト ON + `--no-pidfile` で無効化。pgrep の誤爆防止 | 2026-03-18 |
+| `--bind` デフォルト `127.0.0.1` | `0.0.0.0` は外部からプロキシとして使える。安全側に倒す | 2026-03-18 |
+| `.example.com` dot-domain 記法導入 | Squid/Nginx 慣習。`*.example.com`（RFC 6125: サブドメインのみ）のセマンティクスは変えず、新記法で root+subdomains をカバー | 2026-03-18 |
 
 ## Technical Findings
 
@@ -24,6 +28,26 @@
 - `build-essential`（cc リンカー）がホストにないと `cargo build` 失敗。WSL2 初期状態では未インストールの場合あり
 - Cargo は `src/lib.rs` と `src/main.rs` が両方あれば自動的に lib + bin ターゲットとして認識する。Cargo.toml への明示的な `[lib]` セクション追加は不要
 - `cargo test` は lib のユニットテスト → bin のユニットテスト → `tests/` の統合テスト → doc-tests の順で実行される
+
+## SIGHUP ハンドラの race condition（2026-03-18 発見・修正）
+
+**根本原因**: `tokio::signal::unix::signal(SignalKind::hangup())` を `tokio::spawn` の中で呼んでいた。
+spawned task が最初に poll されるまでシグナルハンドラは登録されない。
+その間に SIGHUP が届くとデフォルトの動作（プロセス終了）が発動。
+
+**修正**: シグナルオブジェクト作成を main 関数内（spawn の外）に移動。
+SIGTERM ハンドラは元から main 内で作成されていたため影響なし。
+
+**テストで再現**: `tokio::process::Command` で子プロセスとして起動 → `libc::kill(pid, SIGHUP)` → プロセスが死ぬことを確認 → 修正後は生存を確認。
+bash の `&` で起動した場合は再現しにくい（タイミングの問題）。
+
+## Wildcard domain matching サーベイ（2026-03-18）
+
+`*.example.com` が `example.com`（ルート）にマッチするか:
+- **業界標準は NO**: RFC 6125, RFC 4592, Squid, Nginx, Chrome, fnmatch すべて
+- **ルート+サブドメイン**: Squid/Nginx の `.example.com`（ドット始まり）が業界標準の解決策
+- ad-block は独自構文 `||example.com^`
+- allowlist 文脈では fail-closed（マッチしない=ブロック）が安全側
 
 ## TDD フェーズ0.5 完了（2026-03-13）
 

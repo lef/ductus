@@ -1,45 +1,65 @@
 # HANDOFF — Session Transition Notes
 
-**Last Updated**: 2026-03-18
-**Previous Work**: --port 0 auto-assign + graceful shutdown (SIGTERM) + contextus-dev-rust 同期
+**Last Updated**: 2026-03-18 (session 2)
+**Previous Work**: SIGHUP fix + pidfile default + --bind + dot-domain allowlist
 
 ## Current State
 
 ### Completed (this session)
 
-- **`--port 0` + stdout 返却**: OS に空きポート割り当て、実ポートを stdout に出力
-- **graceful shutdown**: SIGTERM で accept loop 停止 + pidfile 自動削除
-- **`run()` 署名変更**: `shutdown: impl Future<Output = ()>` 引数追加、`tokio::select!` で accept loop
-- **テスト3件追加**（合計42テスト: unit 30 + integration 12）
-- **contextus-dev-rust 同期**: Model Switching ルール更新（Opus 4.6 1M で基本不要に）
-- **sandbox 環境確認**: Rust 1.94.0 が sandbox 内で完全動作（persistent overlay 解消済み）
+- **SIGHUP race condition 修正**: signal 登録を `tokio::spawn` の外に移動。旧コードでは登録前に SIGHUP が届くとプロセス終了 → sandbox 全断
+- **signal `.expect()` 除去**: SIGHUP は match+warning、SIGTERM は `?` 伝播
+- **pidfile デフォルト化**: `/tmp/ductus.pid` をデフォルトで作成。`--no-pidfile` で無効化、`--pidfile <path>` で上書き
+- **`--bind` オプション**: デフォルト `127.0.0.1`（安全側）。`--bind 0.0.0.0` で全インターフェース Listen
+- **`.example.com` dot-domain 記法**: root + 全サブドメイン（Squid/Nginx 慣習）。`*.example.com` は RFC 6125 準拠でサブドメインのみ
+- **allowlist.txt にドキュメント追記**: 3種類の記法の説明
+- **テスト追加**: 合計52テスト（unit 35 + integration 17）
+- **リリースバイナリビルド済み**: `proxy/target/aarch64-unknown-linux-musl/release/ductus` (1.1MB)
+- **L1 (contextus-claude) 同期**: hooks/rules/skills/agents/settings.json を最新に同期（前セッション）
 
 ### In Progress
 
-なし
+- **ductus バイナリ更新**: リリースビルド完了済み。ホスト側で旧バイナリを差し替えて再起動が必要
 
 ### Not Started (priority order)
 
-1. **`--blacklist`** — 永久ブロックリスト。allowlist にあっても拒否
-2. **`--audit-log`** — 全 CONNECT リクエストを記録（許可・ブロック両方）
-3. **GitHub リリース**（低優先度）— `git tag v0.1.0 && git push && git push --tags`
-4. **tutus 側 `ductus-session.sh` 更新** — `--port 0` + graceful shutdown 対応
-5. **透過プロキシモード** — HTTP_PROXY 不要で全通信キャプチャ
-6. **フェーズ1** — HTTPS インターセプト設計。当面先
+1. **gh CLI 導入**: allowlist に `.github.com` + `.githubusercontent.com` 追加済み（ホスト側）。バイナリ更新後にインストール可能
+2. **git push**: ローカルに 5+ コミットが溜まっている。gh 導入後に push
+3. **tutus `ductus-session.sh` 更新**: `--bind`, `--no-pidfile`, `--port 0` 対応。現在は ss ループでポートスキャン中
+4. **`--blacklist`** — 永久ブロックリスト
+5. **`--audit-log`** — 全 CONNECT リクエストを記録
+6. **透過プロキシモード** — HTTP_PROXY 不要で全通信キャプチャ
+7. **フェーズ1** — HTTPS インターセプト設計
 
 ## Next Session: Read First
 
 - `.spec/TODO.md` — 現状確認
 - `ductus --help` で全フラグ確認
-- tutus HANDOFF に `--port 0` + SIGTERM 対応の依頼を入れる
+- ホスト側でバイナリ更新が完了したか確認
+
+## Next Session: Host-Side Actions Required
+
+ductus バイナリ更新手順（ホスト側で実行）:
+```bash
+kill -TERM $(pgrep ductus)
+cp ~/repos/ductus/proxy/target/aarch64-unknown-linux-musl/release/ductus ~/.local/bin/ductus
+# sandbox 再起動で ductus-session.sh が新バイナリを自動起動
+make claude-ductus P=~/repos/ductus REPOS=~/repos
+```
+
+注意:
+- `--bind` デフォルトが `127.0.0.1` に変更。sandbox は `--net=host` なので問題なし
+- `ductus-session.sh` は `--bind` を渡していないが、`127.0.0.1` で OK
+- ただし `ductus-session.sh` が `--port 0` に未対応（まだ ss ループ）。将来更新予定
 
 ## Key Decisions Made
 
+- **SIGHUP ハンドラは spawn の外**: `tokio::signal::unix::signal()` は即座にOSレベルのハンドラを登録する。spawn 内だと task poll 待ちになり race が生じる
+- **pidfile デフォルト ON**: `pgrep` の誤爆で sandbox が死ぬのを防止
+- **`--bind` デフォルト `127.0.0.1`**: 外部からプロキシとして使われるリスクを排除
+- **`.example.com` 新記法**: `*.example.com` の RFC 6125 セマンティクスは変えない。Squid/Nginx 慣習の新記法で UX 改善
 - **chrono 非依存の UTC フォーマット**: `SystemTime` + 手計算。外部 crate 追加不要
 - **`BlockedLog` は `Arc<Mutex<>>`（tokio 版でなく）**: ファイル書き込みは sync、`.await` またがない
-- **`run()` に `shutdown: impl Future<Output = ()>`**: テスタビリティ + 柔軟性。テストは `oneshot` や `pending()` を渡せる
-- **port 0 時のみ stdout 出力**: 既存スクリプトの互換性維持。stderr のログは常に actual_port
-- **in-flight 接続の drain なし**: shutdown 時は accept loop のみ停止。spawned tasks は runtime 終了時に drop（現状十分）
 - **Opus 4.6 1M でモデル切り替え不要**: contextus-dev-rust のルールは「コスト最適化モード」として残した
 
 ## Rust 開発環境（2026-03-18 確認済み）
@@ -52,18 +72,21 @@
 
 ## Blockers / Watch Out For
 
-- GitHub Actions release は未実行（push していない）
-- `Text file busy` エラー: ductus が起動中のまま `cp` すると失敗する。`pkill ductus` してから
+- **ホスト側バイナリ更新が必要**: 新機能（--bind, dot-domain）は新バイナリでのみ動作
+- **旧 ductus の SIGHUP は危険**: kill -HUP すると sandbox ごと死ぬ。kill -TERM は安全
+- `Text file busy` エラー: ductus が起動中のまま `cp` すると失敗する。`kill -TERM` してから
 - tutus の `ductus-session.sh` は `--port 0` 未対応（まだ ss ループでポートスキャン中）
+- GitHub Actions release は未実行（push していない）
 
 ## Changed Files (this session)
 
-- `proxy/src/lib.rs`: `run()` に `shutdown` 引数追加、`tokio::select!` で accept loop
-- `proxy/src/main.rs`: SIGTERM ハンドラ、`--port 0` stdout 出力、pidfile クリーンアップ
-- `proxy/tests/proxy_test.rs`: shutdown テスト2件 + port 0 テスト1件追加
-- `.claude/rules/rust/ai-agent-rust.md`: Model Switching セクション更新
-- `.spec/KNOWLEDGE.md`: 新決定事項 + sandbox 環境確認 + 実装記録
-- `.spec/TODO.md`: フェーズ0.7 セクション追加
+- `proxy/src/main.rs`: SIGHUP 修正、pidfile デフォルト化、`--bind`/`--no-pidfile` 追加
+- `proxy/src/lib.rs`: `dot_domains` フィールド、`dot_domain_match()`、doc comment 更新
+- `proxy/tests/proxy_test.rs`: テスト8件追加（pidfile 2件、SIGHUP 1件、dot-domain 1件、bind 1件、etc.）
+- `proxy/Cargo.toml`: libc dev-dependency 追加
+- `proxy/allowlist.txt`: 記法ドキュメント追記
+- `.spec/KNOWLEDGE.md`: SIGHUP race, wildcard サーベイ, 新決定事項
+- `.spec/TODO.md`: フェーズ0.8 セクション追加
 
 ## Feature Request: 全通信の audit log（2026-03-13）
 
