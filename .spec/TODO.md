@@ -49,13 +49,23 @@
 - [x] テスト追加 — 合計52テスト（unit 35 + integration 17）
 - [x] cargo fmt + clippy クリーン
 
+## Sandbox Credential Architecture（設計完了、Phase 1 実装済み）
+
+> sandbox 内から push が必要。credential は安全に注入。（2026-03-18）
+
+- [x] 設計: Option D Hybrid（FG-PAT + OAuth injection → SELinux/AppArmor）
+- [x] Socket forwarding 却下（SSH agent/Docker socket hijacking）
+- [x] `ductus-gh-setup.sh` — per-project FG-PAT setup script（tutus 側）
+- [x] `claude-sandbox.sh` — GH config bind-ro mount 追加（tutus 側）
+- [x] `Makefile` — `gh-setup` ターゲット追加（tutus 側）
+- [ ] ホスト側で `make gh-setup` 実行 → sandbox 再起動で git push 動作確認
+- [ ] Phase 2: SELinux/AppArmor process-restricted credentials（将来）
+
 ## 未着手（優先度順）
 
 - [ ] `--blacklist` — 永久ブロックリスト。allowlist にあっても拒否
 - [ ] `--audit-log` — 全 CONNECT リクエストを記録（許可・ブロック両方）
 - [ ] tutus `ductus-session.sh` 更新 — `--bind`, `--no-pidfile`, `--port 0` 対応
-- [ ] gh CLI を sandbox に導入（allowlist に `.github.com` + `.githubusercontent.com` 追加済み）
-- [ ] `git push` — ローカルに溜まったコミットを push
 
 ## GitHub リリース（低優先度）
 
