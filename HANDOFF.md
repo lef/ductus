@@ -18,7 +18,8 @@
 
 ### Not Started (priority order)
 
-1. **`--blacklist`** — 永久ブロックリスト（allowlist にあっても拒否）
+1. **ductus-allow ファイルパス不一致（HIGH）** — tutus の ductus-session.sh が mktemp でランダム名の pidfile/session-allowlist を作るため、ductus-allow がデフォルトパスで見つけられない。複数インスタンス対応は正しいが、discovery 機構がない。案: `/tmp/ductus/<project-slug>/` にまとめる。主に tutus 側の修正（ductus 本体は --pidfile を受け取るだけで変更不要）
+2. **`--blacklist`** — 永久ブロックリスト（allowlist にあっても拒否）
 2. **`--audit-log`** — 全 CONNECT リクエストを記録
 3. **SELinux/AppArmor credential isolation** — Phase 2（将来）
 
