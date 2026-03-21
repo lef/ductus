@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enableAllProjectMcpServers": false,
+  "statusLine": {
+    "type": "command",
+    "command": "sh -c 'CLAUDE_STATUSLINE_BADGE=${CLAUDE_STATUSLINE_BADGE:-🏜} CLAUDE_STATUSLINE_HIDE=${CLAUDE_STATUSLINE_HIDE:-cost} $HOME/.claude/statusline.sh'"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(sudo rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -f*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.git-credentials)",
+      "Edit(~/.zshrc)",
+      "Write(~/.zshrc)",
+      "Edit(~/.bashrc)",
+      "Write(~/.bashrc)"
+    ]
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git add -A && git diff --cached --quiet || git commit -m 'checkpoint: pre-compact auto-commit'"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/pre-compact.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/trace-log.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == \"Edit\" || tool == \"Write\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/workflow-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "tool == \"Bash\" && tool_input.command matches \"git push\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] git push detected. Review the changes above.' >&2; echo '[Hook] Press Enter to continue, Ctrl+C to abort' >&2; [ -t 0 ] && read -r || true"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/session-start.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/session-banner.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/memory-persistence/session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

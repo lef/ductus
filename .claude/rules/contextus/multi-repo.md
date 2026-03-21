@@ -1,5 +1,7 @@
 # Multi-Repository Work Discipline
 
+> L0: applies to all agents and domains.
+
 ## 作業対象を常に意識する
 
 複数リポジトリを横断して作業するとき、**今どのリポジトリに対して操作しているか**を常に意識する。

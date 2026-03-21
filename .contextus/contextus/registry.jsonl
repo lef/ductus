@@ -1,0 +1,38 @@
+# CS-REGISTRY — Contextus Registry (trust anchor)
+# See specs/CS-REGISTRY.md for formal specification.
+# Lines starting with # are comments. Parsers MUST skip them.
+
+# --- header fields ---
+{"kind":"header","field":"Type","level":"MUST","values":["HANDOFF","TODO","TASK","SPEC","DESIGN","KNOWLEDGE","DRAFT","CONSTITUTION","PLAN","README","AGENTS","RULE"],"format":"enum","description":"Document type identifier. Any markdown file with > Type: is a CS-MD document","registered_by":"L0/contextus","reference":"Dublin Core type, OpenGraph og:type, RFC Category"}
+{"kind":"header","field":"Updated","level":"MUST","format":"ISO 8601 (YYYY-MM-DD or YYYY-MM-DDTHH:MM)","description":"Last modification timestamp","registered_by":"L0/contextus","reference":"Schema.org dateModified, HTTP Last-Modified"}
+{"kind":"header","field":"Version","level":"MAY","format":"SemVer (X.Y.Z)","description":"Document version. Major = breaking section change, Minor = section added, Patch = content update","registered_by":"L0/contextus","reference":"Schema.org version, SemVer 2.0"}
+{"kind":"header","field":"Provenance","level":"MAY","format":"repo@branch:short-hash or chain (a@b:h-->c@d:h)","description":"Origin and lineage. Hash = identifier (globally unique via SHA). repo@branch = locator (human context)","registered_by":"L0/contextus","reference":"SPDX VCS locator, purl, Dublin Core source"}
+{"kind":"header","field":"Status","level":"MAY","values":["draft","discussion","in_progress","confirmed","archived"],"format":"enum","description":"Document lifecycle state","registered_by":"L0/contextus","reference":"Schema.org CreativeWorkStatus, RFC Status, GitHub state"}
+{"kind":"header","field":"Tags","level":"MAY","format":"comma-separated","description":"Classification and search keywords","registered_by":"L0/contextus","reference":"Dublin Core subject, Schema.org keywords"}
+{"kind":"header","field":"Context","level":"MAY","format":"reference","description":"Link to discussion origin (e.g., MINUTES entry)","registered_by":"L0/contextus"}
+{"kind":"header","field":"Description","level":"MAY","format":"single line","description":"Short summary for indexing","registered_by":"L0/contextus","reference":"Dublin Core description"}
+
+# --- document types (non-Structured-Flow) ---
+{"kind":"type","field":"README","level":"MAY","description":"Project README. Provenance tracks which version/origin","registered_by":"L0/contextus"}
+{"kind":"type","field":"AGENTS","level":"MAY","description":"AAIF agent instructions. Provenance tracks L0 version","registered_by":"L0/contextus","reference":"AAIF AGENTS.md"}
+{"kind":"type","field":"RULE","level":"MAY","description":"L0/L2/L3 rule file. Provenance replaces L-prefix naming","registered_by":"L0/contextus"}
+
+# --- sections ---
+{"kind":"section","field":"Task","level":"MUST","types":["HANDOFF"],"description":"Current or next execution unit","registered_by":"L0/contextus"}
+{"kind":"section","field":"Context","level":"MUST","types":["HANDOFF"],"description":"Relevant context for the task","registered_by":"L0/contextus"}
+{"kind":"section","field":"Goal","level":"MUST","types":["TASK"],"description":"What this task should accomplish","registered_by":"L0/contextus"}
+{"kind":"section","field":"Blockers","level":"SHOULD","types":["HANDOFF"],"description":"Blocking issues preventing progress","registered_by":"L0/contextus"}
+{"kind":"section","field":"Completed","level":"SHOULD","types":["HANDOFF"],"description":"Work completed in current/recent session","registered_by":"L0/contextus"}
+{"kind":"section","field":"Decisions","level":"MAY","types":["HANDOFF"],"description":"Key decisions made and rationale","registered_by":"L0/contextus"}
+{"kind":"section","field":"References","level":"MUST","types":["CONSTITUTION","SPEC","DESIGN"],"description":"Related documents (normative). Design roots must be traceable","registered_by":"L0/contextus","reference":"RFC References section"}
+{"kind":"section","field":"References","level":"SHOULD","types":["TASK","KNOWLEDGE"],"description":"Related documents. Mature entries should cite their sources","registered_by":"L0/contextus"}
+{"kind":"section","field":"References","level":"MAY","types":["HANDOFF","DRAFT","PLAN","TODO"],"description":"Related documents (optional for ephemeral/exploratory types)","registered_by":"L0/contextus"}
+{"kind":"section","field":"Changed Files","level":"MAY","types":["HANDOFF"],"description":"List of files modified","registered_by":"L0/contextus"}
+
+{"kind":"section","field":"Acceptance Criteria","level":"SHOULD","types":["TASK"],"description":"Conditions for task completion","registered_by":"L0/contextus"}
+{"kind":"section","field":"Problem","level":"SHOULD","types":["DRAFT"],"description":"Problem statement being explored","registered_by":"L0/contextus"}
+{"kind":"section","field":"Open Questions","level":"SHOULD","types":["DRAFT"],"description":"Unresolved questions under discussion","registered_by":"L0/contextus"}
+{"kind":"section","field":"Inherited Principles","level":"MUST","types":["CONSTITUTION"],"description":"Principles inherited from lower layers","registered_by":"L0/contextus"}
+
+# --- markers ---
+{"kind":"marker","field":"[NEEDS CLARIFICATION]","level":"MAY","types":["SPEC","DESIGN","DRAFT"],"description":"Unresolved ambiguity placeholder. Must be resolved before confirmation","registered_by":"L0/contextus","reference":"GitHub Spec Kit clarify pattern"}

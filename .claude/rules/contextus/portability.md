@@ -1,5 +1,7 @@
 # Portability Rules
 
+> L0: applies to all agents and domains.
+
 ## ハードコードされたパスの禁止（最重要）
 
 スクリプト・スキル・プロンプト文書を問わず、絶対パスをハードコードしない。

@@ -2,6 +2,14 @@
 
 Agent-agnostic SDD rules. Language- and tool-specific extensions belong in L2+ layers.
 
+## CONSTITUTION
+
+If `.spec/CONSTITUTION.md` exists, it defines the project's absolute constraints
+(tech stack, security, design principles). All agents must respect it in every phase.
+Constitution is written by the human and rarely changes.
+
+Inspired by GitHub Spec Kit's constitution concept (pattern adopted, no tool dependency).
+
 ## New Repository Rule
 
 **When creating a new repository, always record WHY in `.spec/PLAN.md` upfront.**
