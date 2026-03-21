@@ -53,7 +53,6 @@ case "$REL_PATH" in
     .spec/*) exit 0 ;;
     .contextus/*) exit 0 ;;
     conf/*) exit 0 ;;
-    Makefile) exit 0 ;;
     *.json) exit 0 ;;
     *.toml) exit 0 ;;
     *.yaml|*.yml) exit 0 ;;
