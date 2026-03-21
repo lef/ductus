@@ -46,8 +46,12 @@ for sdd_file in TODO.md PLAN.md KNOWLEDGE.md; do
         tag=$(echo "$sdd_file" | sed 's/\.md$//' | tr '[:upper:]' '[:lower:]')
         echo "[session:${tag}]"
         if [ "$sdd_file" = "TODO.md" ]; then
-            # Filter out completed tasks (- [x]) to reduce context noise
-            grep -v '^- \[x\]' "$filepath"
+            # Filter out completed tasks (- [x]) and their indented children
+            awk '
+                /^- \[x\]/ { skip = 1; next }
+                /^[^ ]/ || /^- / { skip = 0 }
+                !skip { print }
+            ' "$filepath"
         else
             cat "$filepath"
         fi
